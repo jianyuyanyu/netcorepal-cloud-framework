@@ -83,9 +83,9 @@ public class Program
         };
         // no short alias to avoid ambiguity
 
-        var withHistoryOption = new Option<bool>(
-            name: "--with-history",
-            description: "Generate HTML with history snapshots support")
+        var noHistoryOption = new Option<bool>(
+            name: "--no-history",
+            description: "Disable history snapshots support (history is enabled by default)")
         {
             IsRequired = false
         };
@@ -104,15 +104,15 @@ public class Program
         generateCommand.AddOption(titleOption);
         generateCommand.AddOption(verboseOption);
         generateCommand.AddOption(includeTestsOption);
-        generateCommand.AddOption(withHistoryOption);
+        generateCommand.AddOption(noHistoryOption);
         generateCommand.AddOption(snapshotDirOption);
         
 
         generateCommand.SetHandler(
-            async (solution, projects, output, title, verbose, includeTests, withHistory, snapshotDir) =>
+            async (solution, projects, output, title, verbose, includeTests, noHistory, snapshotDir) =>
             {
-                await GenerateVisualization(solution, projects, output, title, verbose, includeTests, withHistory, snapshotDir);
-            }, solutionOption, projectOption, outputOption, titleOption, verboseOption, includeTestsOption, withHistoryOption, snapshotDirOption);
+                await GenerateVisualization(solution, projects, output, title, verbose, includeTests, !noHistory, snapshotDir);
+            }, solutionOption, projectOption, outputOption, titleOption, verboseOption, includeTestsOption, noHistoryOption, snapshotDirOption);
 
         rootCommand.AddCommand(generateCommand);
         
@@ -128,34 +128,39 @@ public class Program
     {
         try
         {
-            // If with-history flag is set, generate HTML from snapshots
+            // Try to generate HTML with history if enabled (default)
             if (withHistory)
             {
-                if (verbose)
-                {
-                    Console.WriteLine($"Generating HTML with history from snapshots in: {snapshotDir}");
-                }
-
                 var storage = new SnapshotStorage(snapshotDir);
                 var snapshots = storage.LoadAllSnapshots();
 
-                if (snapshots.Count == 0)
+                if (snapshots.Count > 0)
                 {
-                    Console.Error.WriteLine("Error: No snapshots found. Please create a snapshot first using 'snapshot add' command.");
-                    ExitHandler.Exit(1);
+                    if (verbose)
+                    {
+                        Console.WriteLine($"Generating HTML with history from snapshots in: {snapshotDir}");
+                        Console.WriteLine($"  Found {snapshots.Count} snapshot(s)");
+                    }
+
+                    var historyHtml = VisualizationHtmlBuilder.GenerateVisualizationHtmlWithHistory(
+                        snapshots,
+                        title);
+
+                    var outputPath = Path.GetFullPath(outputFile.FullName);
+                    await File.WriteAllTextAsync(outputPath, historyHtml);
+
+                    Console.WriteLine($"✅ HTML visualization with history generated successfully: {outputPath}");
+                    Console.WriteLine($"  {snapshots.Count} snapshot(s) included");
                     return;
                 }
-
-                var historyHtml = VisualizationHtmlBuilder.GenerateVisualizationHtmlWithHistory(
-                    snapshots,
-                    title);
-
-                var outputPath = Path.GetFullPath(outputFile.FullName);
-                await File.WriteAllTextAsync(outputPath, historyHtml);
-
-                Console.WriteLine($"✅ HTML visualization with history generated successfully: {outputPath}");
-                Console.WriteLine($"  {snapshots.Count} snapshot(s) included");
-                return;
+                else
+                {
+                    if (verbose)
+                    {
+                        Console.WriteLine("No snapshots found, generating HTML without history.");
+                        Console.WriteLine("Use 'snapshot add' command to create snapshots for history tracking.");
+                    }
+                }
             }
 
             if (verbose)
@@ -629,24 +634,9 @@ public class Program
             ShowSnapshot(version, snapshotDir, verbose);
         }, versionArg, snapshotDirOption, verboseOption);
 
-        // snapshot diff command
-        var diffCommand = new Command("diff", "Show differences between two snapshots");
-        var fromVersionArg = new Argument<string>("from", "Source snapshot version");
-        var toVersionArg = new Argument<string>("to", "Target snapshot version (default: latest)") { Arity = ArgumentArity.ZeroOrOne };
-        diffCommand.AddArgument(fromVersionArg);
-        diffCommand.AddArgument(toVersionArg);
-        diffCommand.AddOption(snapshotDirOption);
-        diffCommand.AddOption(verboseOption);
-
-        diffCommand.SetHandler((fromVersion, toVersion, snapshotDir, verbose) =>
-        {
-            DiffSnapshots(fromVersion, toVersion, snapshotDir, verbose);
-        }, fromVersionArg, toVersionArg, snapshotDirOption, verboseOption);
-
         snapshotCommand.AddCommand(addCommand);
         snapshotCommand.AddCommand(listCommand);
         snapshotCommand.AddCommand(showCommand);
-        snapshotCommand.AddCommand(diffCommand);
 
         return snapshotCommand;
     }
@@ -919,114 +909,6 @@ public class Program
                 foreach (var group in relStats)
                 {
                     Console.WriteLine($"  {group.Key}: {group.Count()}");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Error: {ex.Message}");
-            if (verbose)
-            {
-                Console.Error.WriteLine($"Stack trace: {ex.StackTrace}");
-            }
-            ExitHandler.Exit(1);
-        }
-    }
-
-    private static void DiffSnapshots(string fromVersion, string? toVersion, string snapshotDir, bool verbose)
-    {
-        try
-        {
-            var storage = new SnapshotStorage(snapshotDir);
-            var fromSnapshot = storage.LoadSnapshot(fromVersion);
-
-            if (fromSnapshot == null)
-            {
-                Console.Error.WriteLine($"Error: Source snapshot not found: {fromVersion}");
-                ExitHandler.Exit(1);
-                return;
-            }
-
-            CodeFlowAnalysisSnapshot? toSnapshot;
-            if (string.IsNullOrEmpty(toVersion))
-            {
-                toSnapshot = storage.GetLatestSnapshot();
-                if (toSnapshot == null)
-                {
-                    Console.Error.WriteLine("Error: No snapshots found");
-                    ExitHandler.Exit(1);
-                    return;
-                }
-            }
-            else
-            {
-                toSnapshot = storage.LoadSnapshot(toVersion);
-                if (toSnapshot == null)
-                {
-                    Console.Error.WriteLine($"Error: Target snapshot not found: {toVersion}");
-                    ExitHandler.Exit(1);
-                    return;
-                }
-            }
-
-            var comparer = new SnapshotComparer();
-            var comparison = comparer.Compare(fromSnapshot, toSnapshot);
-
-            Console.WriteLine($"Comparing snapshots:");
-            Console.WriteLine($"  From: {comparison.FromSnapshot?.Version} ({comparison.FromSnapshot?.Timestamp:yyyy-MM-dd HH:mm:ss})");
-            Console.WriteLine($"  To:   {comparison.ToSnapshot?.Version} ({comparison.ToSnapshot?.Timestamp:yyyy-MM-dd HH:mm:ss})");
-            Console.WriteLine();
-
-            Console.WriteLine("Summary:");
-            Console.WriteLine($"  Nodes:         +{comparison.AddedNodes} -{comparison.RemovedNodes} ={comparison.UnchangedNodes}");
-            Console.WriteLine($"  Relationships: +{comparison.AddedRelationships} -{comparison.RemovedRelationships} ={comparison.UnchangedRelationships}");
-
-            if (verbose || comparison.AddedNodes > 0 || comparison.RemovedNodes > 0)
-            {
-                Console.WriteLine();
-                
-                if (comparison.AddedNodes > 0)
-                {
-                    Console.WriteLine($"Added Nodes ({comparison.AddedNodes}):");
-                    foreach (var nodeDiff in comparison.NodeDiffs.Where(d => d.DiffType == DiffType.Added))
-                    {
-                        Console.WriteLine($"  + [{nodeDiff.Node.Type}] {nodeDiff.Node.Name}");
-                    }
-                }
-
-                if (comparison.RemovedNodes > 0)
-                {
-                    Console.WriteLine($"\nRemoved Nodes ({comparison.RemovedNodes}):");
-                    foreach (var nodeDiff in comparison.NodeDiffs.Where(d => d.DiffType == DiffType.Removed))
-                    {
-                        Console.WriteLine($"  - [{nodeDiff.Node.Type}] {nodeDiff.Node.Name}");
-                    }
-                }
-
-                if (comparison.AddedRelationships > 0)
-                {
-                    Console.WriteLine($"\nAdded Relationships ({comparison.AddedRelationships}):");
-                    foreach (var relDiff in comparison.RelationshipDiffs.Where(d => d.DiffType == DiffType.Added).Take(20))
-                    {
-                        Console.WriteLine($"  + {relDiff.Relationship.FromNode.Name} --[{relDiff.Relationship.Type}]--> {relDiff.Relationship.ToNode.Name}");
-                    }
-                    if (comparison.AddedRelationships > 20)
-                    {
-                        Console.WriteLine($"  ... and {comparison.AddedRelationships - 20} more");
-                    }
-                }
-
-                if (comparison.RemovedRelationships > 0)
-                {
-                    Console.WriteLine($"\nRemoved Relationships ({comparison.RemovedRelationships}):");
-                    foreach (var relDiff in comparison.RelationshipDiffs.Where(d => d.DiffType == DiffType.Removed).Take(20))
-                    {
-                        Console.WriteLine($"  - {relDiff.Relationship.FromNode.Name} --[{relDiff.Relationship.Type}]--> {relDiff.Relationship.ToNode.Name}");
-                    }
-                    if (comparison.RemovedRelationships > 20)
-                    {
-                        Console.WriteLine($"  ... and {comparison.RemovedRelationships - 20} more");
-                    }
                 }
             }
         }

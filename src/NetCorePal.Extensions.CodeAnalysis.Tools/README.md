@@ -161,46 +161,26 @@ netcorepal-codeanalysis snapshot show 20260116120000
 netcorepal-codeanalysis snapshot show 20260116120000 --verbose
 ```
 
-### 比较快照差异
-
-```bash
-# 比较两个版本之间的差异
-netcorepal-codeanalysis snapshot diff 20260114090000 20260116120000
-
-# 与最新版本比较（省略第二个参数）
-netcorepal-codeanalysis snapshot diff 20260114090000
-
-# 输出示例：
-# Comparing snapshots:
-#   From: 20260114090000 (2026-01-14 09:00:00)
-#   To:   20260116120000 (2026-01-16 12:00:00)
-#
-# Summary:
-#   Nodes:         +13 -0 =32
-#   Relationships: +26 -0 =52
-#
-# Added Nodes (13):
-#   + [Command] CreateOrderCommand
-#   + [CommandHandler] CreateOrderCommandHandler
-#   + [Aggregate] Order
-#   ...
-```
-
 ### 生成带历史记录的HTML
 
 ```bash
-# 生成包含所有历史快照的交互式HTML
-netcorepal-codeanalysis generate --with-history
+# 默认生成包含历史快照的交互式HTML（如果存在快照）
+netcorepal-codeanalysis generate
+
+# 禁用历史记录功能
+netcorepal-codeanalysis generate --no-history
 
 # 指定快照目录
-netcorepal-codeanalysis generate --with-history --snapshot-dir ./my-snapshots --output history.html
+netcorepal-codeanalysis generate --snapshot-dir ./MySnapshots --output history.html
 ```
 
 生成的HTML页面包含：
-- 📊 **版本选择器**：可以切换查看不同版本的架构
+- 📊 **版本选择器**：可以切换查看不同版本的架构（如果存在多个快照）
 - 📈 **趋势图表**：展示节点数量和关系数量随时间的变化趋势
 - 🔍 **版本对比**：高亮显示版本间的差异
 - 📝 **版本信息**：显示每个版本的时间戳、描述和统计信息
+
+**注意**：如果没有快照文件，将自动生成不含历史的HTML。
 
 ### 典型工作流程
 
@@ -213,12 +193,11 @@ netcorepal-codeanalysis snapshot add --description "项目初始版本"
 # 3. 创建新快照
 netcorepal-codeanalysis snapshot add --description "添加支付功能"
 
-# 4. 查看变化
+# 4. 查看快照历史
 netcorepal-codeanalysis snapshot list
-netcorepal-codeanalysis snapshot diff <旧版本> <新版本>
 
-# 5. 生成历史可视化
-netcorepal-codeanalysis generate --with-history --output architecture-history.html
+# 5. 生成可视化（默认包含历史）
+netcorepal-codeanalysis generate --output architecture.html
 
 # 6. 提交快照到版本控制（推荐）
 git add Snapshots/
