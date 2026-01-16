@@ -36,30 +36,28 @@ public static class CodeFlowAnalysisSnapshotHelper
             RelationshipCount = analysisResult.Relationships.Count
         };
         
-        return new CodeFlowAnalysisSnapshot
-        {
-            Metadata = metadata,
-            AnalysisResult = analysisResult
-        };
+        return new RuntimeSnapshot(metadata, analysisResult);
     }
     
     /// <summary>
-    /// 基于CodeFlowAnalysisSnapshot实例，生成C#快照类代码（类似EF Core迁移）
+    /// 基于CodeFlowAnalysisSnapshot实例，生成C#快照类代码（继承自CodeFlowAnalysisSnapshot抽象基类）
     /// </summary>
     /// <param name="snapshot">快照实例</param>
+    /// <param name="snapshotName">快照名称（可选，用于生成更具描述性的类名）</param>
     /// <returns>C#代码字符串</returns>
-    public static string GenerateSnapshotCode(CodeFlowAnalysisSnapshot snapshot)
+    public static string GenerateSnapshotCode(CodeFlowAnalysisSnapshot snapshot, string? snapshotName = null)
     {
-        return GenerateSnapshotCode(snapshot.AnalysisResult, snapshot.Metadata);
+        return GenerateSnapshotCode(snapshot.AnalysisResult, snapshot.Metadata, snapshotName);
     }
     
     /// <summary>
-    /// 基于分析结果和元数据，生成C#快照类代码
+    /// 基于分析结果和元数据，生成C#快照类代码（继承自CodeFlowAnalysisSnapshot抽象基类）
     /// </summary>
     /// <param name="analysisResult">分析结果</param>
     /// <param name="metadata">快照元数据</param>
+    /// <param name="snapshotName">快照名称（可选，用于生成更具描述性的类名）</param>
     /// <returns>C#代码字符串</returns>
-    public static string GenerateSnapshotCode(CodeFlowAnalysisResult analysisResult, SnapshotMetadata metadata)
+    public static string GenerateSnapshotCode(CodeFlowAnalysisResult analysisResult, SnapshotMetadata metadata, string? snapshotName = null)
     {
         var sb = new StringBuilder();
         
@@ -80,13 +78,13 @@ public static class CodeFlowAnalysisSnapshotHelper
         sb.AppendLine("namespace CodeAnalysisSnapshots");
         sb.AppendLine("{");
         
-        // Class declaration
-        var className = $"Snapshot_{metadata.Version}";
-        sb.AppendLine($"    public partial class {className}");
+        // Class declaration - inherits from CodeFlowAnalysisSnapshot
+        var className = GenerateClassName(metadata.Version, snapshotName);
+        sb.AppendLine($"    public partial class {className} : CodeFlowAnalysisSnapshot");
         sb.AppendLine("    {");
         
-        // BuildSnapshot method
-        sb.AppendLine("        public static CodeFlowAnalysisSnapshot BuildSnapshot()");
+        // Constructor to initialize metadata
+        sb.AppendLine($"        public {className}()");
         sb.AppendLine("        {");
         sb.AppendLine("            var nodes = new List<Node>");
         sb.AppendLine("            {");
@@ -125,23 +123,21 @@ public static class CodeFlowAnalysisSnapshotHelper
         sb.AppendLine("            };");
         sb.AppendLine();
         
-        // Create and return snapshot
-        sb.AppendLine("            return new CodeFlowAnalysisSnapshot");
+        // Initialize metadata and analysis result in constructor
+        sb.AppendLine("            Metadata = new SnapshotMetadata");
         sb.AppendLine("            {");
-        sb.AppendLine("                Metadata = new SnapshotMetadata");
-        sb.AppendLine("                {");
-        sb.AppendLine($"                    Version = \"{metadata.Version}\",");
-        sb.AppendLine($"                    Timestamp = DateTime.Parse(\"{metadata.Timestamp:yyyy-MM-dd HH:mm:ss}\"),");
-        sb.AppendLine($"                    Description = \"{EscapeCSharpString(metadata.Description)}\",");
-        sb.AppendLine($"                    Hash = \"{metadata.Hash}\",");
-        sb.AppendLine($"                    NodeCount = {metadata.NodeCount},");
-        sb.AppendLine($"                    RelationshipCount = {metadata.RelationshipCount}");
-        sb.AppendLine("                },");
-        sb.AppendLine("                AnalysisResult = new CodeFlowAnalysisResult");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    Nodes = nodes,");
-        sb.AppendLine("                    Relationships = relationships");
-        sb.AppendLine("                }");
+        sb.AppendLine($"                Version = \"{metadata.Version}\",");
+        sb.AppendLine($"                Timestamp = DateTime.Parse(\"{metadata.Timestamp:yyyy-MM-dd HH:mm:ss}\"),");
+        sb.AppendLine($"                Description = \"{EscapeCSharpString(metadata.Description)}\",");
+        sb.AppendLine($"                Hash = \"{metadata.Hash}\",");
+        sb.AppendLine($"                NodeCount = {metadata.NodeCount},");
+        sb.AppendLine($"                RelationshipCount = {metadata.RelationshipCount}");
+        sb.AppendLine("            };");
+        sb.AppendLine();
+        sb.AppendLine("            AnalysisResult = new CodeFlowAnalysisResult");
+        sb.AppendLine("            {");
+        sb.AppendLine("                Nodes = nodes,");
+        sb.AppendLine("                Relationships = relationships");
         sb.AppendLine("            };");
         sb.AppendLine("        }");
         
@@ -164,30 +160,28 @@ public static class CodeFlowAnalysisSnapshotHelper
         {
             try
             {
-                // 查找所有快照类（在CodeAnalysisSnapshots命名空间下，类名以Snapshot_开头）
+                // 查找所有快照类（在CodeAnalysisSnapshots命名空间下，继承自CodeFlowAnalysisSnapshot）
                 var snapshotTypes = assembly.GetTypes()
                     .Where(t => t.Namespace == "CodeAnalysisSnapshots" 
-                             && t.Name.StartsWith("Snapshot_")
+                             && typeof(CodeFlowAnalysisSnapshot).IsAssignableFrom(t)
                              && t.IsClass 
                              && !t.IsAbstract)
                     .ToList();
                 
                 foreach (var type in snapshotTypes)
                 {
-                    // 查找BuildSnapshot静态方法
-                    var buildMethod = type.GetMethod("BuildSnapshot", 
-                        BindingFlags.Public | BindingFlags.Static);
-                    
-                    if (buildMethod != null 
-                        && buildMethod.ReturnType == typeof(CodeFlowAnalysisSnapshot)
-                        && buildMethod.GetParameters().Length == 0)
+                    try
                     {
-                        // 调用BuildSnapshot方法获取快照实例
-                        var snapshot = buildMethod.Invoke(null, null) as CodeFlowAnalysisSnapshot;
+                        // 创建快照实例（通过无参构造函数）
+                        var snapshot = Activator.CreateInstance(type) as CodeFlowAnalysisSnapshot;
                         if (snapshot != null)
                         {
                             snapshots.Add(snapshot);
                         }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Error creating snapshot instance for type {type.Name}: {ex.Message}");
                     }
                 }
             }
@@ -200,6 +194,65 @@ public static class CodeFlowAnalysisSnapshotHelper
         
         // 按版本号排序
         return snapshots.OrderBy(s => s.Metadata.Version).ToList();
+    }
+    
+    /// <summary>
+    /// 生成快照类名，格式为：版本号_名称（如果提供）
+    /// 例如：20250922092235_InitialCreate0922 或 20250922092235
+    /// </summary>
+    /// <param name="version">版本号（时间戳）</param>
+    /// <param name="name">快照名称（可选）</param>
+    /// <returns>类名</returns>
+    public static string GenerateClassName(string version, string? name = null)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return $"{version}";
+        }
+        
+        // 清理名称，确保是有效的C#标识符
+        var sanitizedName = SanitizeIdentifier(name);
+        return $"{version}_{sanitizedName}";
+    }
+    
+    /// <summary>
+    /// 生成文件名，格式为：版本号_名称.cs（如果提供名称）或 版本号.cs
+    /// 例如：20250922092235_InitialCreate0922.cs
+    /// </summary>
+    /// <param name="version">版本号（时间戳）</param>
+    /// <param name="name">快照名称（可选）</param>
+    /// <returns>文件名</returns>
+    public static string GenerateFileName(string version, string? name = null)
+    {
+        return $"{GenerateClassName(version, name)}.cs";
+    }
+    
+    /// <summary>
+    /// 清理字符串使其成为有效的C#标识符
+    /// </summary>
+    private static string SanitizeIdentifier(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return "Snapshot";
+            
+        var sb = new StringBuilder();
+        foreach (var c in input)
+        {
+            if (char.IsLetterOrDigit(c) || c == '_')
+            {
+                sb.Append(c);
+            }
+        }
+        
+        var result = sb.ToString();
+        
+        // 确保不以数字开头
+        if (result.Length > 0 && char.IsDigit(result[0]))
+        {
+            result = "S" + result;
+        }
+        
+        return string.IsNullOrWhiteSpace(result) ? "Snapshot" : result;
     }
     
     /// <summary>
@@ -235,5 +288,17 @@ public static class CodeFlowAnalysisSnapshotHelper
             .Replace("\n", "\\n")
             .Replace("\r", "\\r")
             .Replace("\t", "\\t");
+    }
+    
+    /// <summary>
+    /// Runtime snapshot implementation used by helper methods
+    /// </summary>
+    private class RuntimeSnapshot : CodeFlowAnalysisSnapshot
+    {
+        public RuntimeSnapshot(SnapshotMetadata metadata, CodeFlowAnalysisResult analysisResult)
+        {
+            Metadata = metadata;
+            AnalysisResult = analysisResult;
+        }
     }
 }

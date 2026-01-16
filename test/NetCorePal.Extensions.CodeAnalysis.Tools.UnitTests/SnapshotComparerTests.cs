@@ -196,7 +196,13 @@ public class SnapshotComparerTests
 
     private static CodeFlowAnalysisSnapshot CreateSnapshot(string version, List<Node> nodes, List<Relationship> relationships)
     {
-        return new CodeFlowAnalysisSnapshot
+        return new TestSnapshot(version, nodes, relationships);
+    }
+
+    // Concrete implementation for testing
+    private class TestSnapshot : CodeFlowAnalysisSnapshot
+    {
+        public TestSnapshot(string version, List<Node> nodes, List<Relationship> relationships)
         {
             Metadata = new SnapshotMetadata
             {
@@ -205,12 +211,12 @@ public class SnapshotComparerTests
                 Description = $"Test snapshot {version}",
                 NodeCount = nodes.Count,
                 RelationshipCount = relationships.Count
-            },
+            };
             AnalysisResult = new CodeFlowAnalysisResult
             {
                 Nodes = nodes,
                 Relationships = relationships
-            }
-        };
+            };
+        }
     }
 }

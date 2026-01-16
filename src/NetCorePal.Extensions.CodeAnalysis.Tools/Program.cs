@@ -573,26 +573,35 @@ public class Program
         descriptionOption.AddAlias("-d");
         descriptionOption.SetDefaultValue("Snapshot created");
 
-        var snapshotDirOption = new Option<string>(
-            name: "--snapshot-dir",
-            description: "Directory to store snapshots (default: ./snapshots)")
+        var nameOption = new Option<string>(
+            name: "--name",
+            description: "Name for the snapshot (used in filename, e.g., InitialCreate)")
         {
             IsRequired = false
         };
-        snapshotDirOption.SetDefaultValue("snapshots");
+        nameOption.AddAlias("-n");
+
+        var snapshotDirOption = new Option<string>(
+            name: "--snapshot-dir",
+            description: "Directory to store snapshots (default: ./Snapshots)")
+        {
+            IsRequired = false
+        };
+        snapshotDirOption.SetDefaultValue("Snapshots");
 
         addCommand.AddOption(solutionOption);
         addCommand.AddOption(projectOption);
         addCommand.AddOption(descriptionOption);
+        addCommand.AddOption(nameOption);
         addCommand.AddOption(snapshotDirOption);
         addCommand.AddOption(verboseOption);
         addCommand.AddOption(includeTestsOption);
 
         addCommand.SetHandler(
-            async (solution, projects, description, snapshotDir, verbose, includeTests) =>
+            async (solution, projects, description, name, snapshotDir, verbose, includeTests) =>
             {
-                await AddSnapshot(solution, projects, description, snapshotDir, verbose, includeTests);
-            }, solutionOption, projectOption, descriptionOption, snapshotDirOption, verboseOption, includeTestsOption);
+                await AddSnapshot(solution, projects, description, name, snapshotDir, verbose, includeTests);
+            }, solutionOption, projectOption, descriptionOption, nameOption, snapshotDirOption, verboseOption, includeTestsOption);
 
         // snapshot list command
         var listCommand = new Command("list", "List all saved snapshots");
@@ -624,7 +633,7 @@ public class Program
     }
 
     private static async Task AddSnapshot(FileInfo? solutionFile, FileInfo[]? projectFiles, string description,
-        string snapshotDir, bool verbose, bool includeTests)
+        string? name, string snapshotDir, bool verbose, bool includeTests)
     {
         try
         {
@@ -712,7 +721,8 @@ public class Program
                 allProjects.ToList(), 
                 absoluteSnapshotDir, 
                 description,
-                version);
+                version,
+                name);
             await File.WriteAllTextAsync(tempAppCsPath, appCsContent);
 
             try

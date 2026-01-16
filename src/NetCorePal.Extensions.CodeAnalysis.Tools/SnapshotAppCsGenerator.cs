@@ -19,12 +19,14 @@ public static class SnapshotAppCsGenerator
     /// <param name="snapshotDir">快照目录</param>
     /// <param name="description">快照描述</param>
     /// <param name="version">快照版本号</param>
+    /// <param name="snapshotName">快照名称（可选，用于生成更具描述性的文件名）</param>
     /// <returns>app.cs文件内容</returns>
     public static string GenerateSnapshotAppCsContent(
         List<string> projectPaths, 
         string snapshotDir, 
         string description,
-        string version)
+        string version,
+        string? snapshotName = null)
     {
         var sb = new StringBuilder();
 
@@ -73,13 +75,21 @@ public static class SnapshotAppCsGenerator
         // 生成快照代码
         var escapedSnapshotDir = snapshotDir.Replace("\\", "\\\\").Replace("\"", "\\\"");
         var escapedDescription = description.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        var escapedSnapshotName = snapshotName != null ? snapshotName.Replace("\\", "\\\\").Replace("\"", "\\\"") : null;
         
         sb.AppendLine("// 创建快照实例");
         sb.AppendLine($"var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(result, \"{escapedDescription}\", \"{version}\");");
         sb.AppendLine();
         
         sb.AppendLine("// 生成快照C#代码");
-        sb.AppendLine("var snapshotCode = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(snapshot);");
+        if (escapedSnapshotName != null)
+        {
+            sb.AppendLine($"var snapshotCode = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(snapshot, \"{escapedSnapshotName}\");");
+        }
+        else
+        {
+            sb.AppendLine("var snapshotCode = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(snapshot);");
+        }
         sb.AppendLine();
         
         sb.AppendLine("// 保存快照文件");
@@ -89,7 +99,14 @@ public static class SnapshotAppCsGenerator
         sb.AppendLine("    Directory.CreateDirectory(snapshotDir);");
         sb.AppendLine("}");
         sb.AppendLine();
-        sb.AppendLine($"var fileName = $\"Snapshot_{{{version}}}.cs\";");
+        if (escapedSnapshotName != null)
+        {
+            sb.AppendLine($"var fileName = CodeFlowAnalysisSnapshotHelper.GenerateFileName(\"{version}\", \"{escapedSnapshotName}\");");
+        }
+        else
+        {
+            sb.AppendLine($"var fileName = CodeFlowAnalysisSnapshotHelper.GenerateFileName(\"{version}\");");
+        }
         sb.AppendLine("var filePath = Path.Combine(snapshotDir, fileName);");
         sb.AppendLine("File.WriteAllText(filePath, snapshotCode);");
         sb.AppendLine();

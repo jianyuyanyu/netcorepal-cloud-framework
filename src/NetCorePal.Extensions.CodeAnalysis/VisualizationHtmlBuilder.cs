@@ -38,21 +38,9 @@ namespace NetCorePal.Extensions.CodeAnalysis
             else
             {
                 // 没有快照时，使用当前分析结果构造一个快照
-                var currentMetadata = new Snapshots.SnapshotMetadata
-                {
-                    Version = DateTime.Now.ToString("yyyyMMddHHmmss"),
-                    Timestamp = DateTime.Now,
-                    Description = "当前版本",
-                    Hash = "",
-                    NodeCount = analysisResult.Nodes.Count,
-                    RelationshipCount = analysisResult.Relationships.Count
-                };
-                
-                var currentSnapshot = new Snapshots.CodeFlowAnalysisSnapshot
-                {
-                    Metadata = currentMetadata,
-                    AnalysisResult = analysisResult
-                };
+                var currentSnapshot = Snapshots.CodeFlowAnalysisSnapshotHelper.CreateSnapshot(
+                    analysisResult, 
+                    "当前版本");
                 
                 snapshotList.Add(currentSnapshot);
             }
