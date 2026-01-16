@@ -1,10 +1,8 @@
 using System;
 using System.Linq;
 using System.Text;
-using NetCorePal.Extensions.CodeAnalysis;
-using NetCorePal.Extensions.CodeAnalysis.Snapshots;
 
-namespace NetCorePal.Extensions.CodeAnalysis.Tools;
+namespace NetCorePal.Extensions.CodeAnalysis.Snapshots;
 
 /// <summary>
 /// 生成C#快照代码文件，类似EF Core的迁移快照

@@ -2,18 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using NetCorePal.Extensions.CodeAnalysis;
 using NetCorePal.Extensions.CodeAnalysis.Snapshots;
 
 namespace NetCorePal.Extensions.CodeAnalysis.Tools;
 
 /// <summary>
-/// 快照存储服务，负责快照的读写操作（生成.cs文件类似EF Core迁移）
+/// 快照存储服务，负责快照的读写操作（通过app.cs生成.cs文件，避免额外依赖）
 /// </summary>
 public class SnapshotStorage
 {
@@ -26,7 +23,7 @@ public class SnapshotStorage
     }
 
     /// <summary>
-    /// 保存快照（生成.cs文件）
+    /// 保存快照（通过app.cs生成.cs文件）
     /// </summary>
     public string SaveSnapshot(CodeFlowAnalysisResult analysisResult, string description, bool verbose = false)
     {
@@ -75,7 +72,7 @@ public class SnapshotStorage
     }
 
     /// <summary>
-    /// 加载指定版本的快照（从.cs文件编译加载）
+    /// 加载指定版本的快照（从.cs文件读取元数据）
     /// </summary>
     public CodeFlowAnalysisSnapshot? LoadSnapshot(string version)
     {
@@ -89,8 +86,8 @@ public class SnapshotStorage
 
         try
         {
-            var code = File.ReadAllText(filePath);
-            return CompileAndLoadSnapshot(code, version);
+            // 使用app.cs方式加载快照
+            return LoadSnapshotViaAppCs(filePath, version);
         }
         catch (Exception ex)
         {
@@ -100,7 +97,7 @@ public class SnapshotStorage
     }
 
     /// <summary>
-    /// 获取所有快照的元数据列表
+    /// 获取所有快照的元数据列表（通过解析.cs文件）
     /// </summary>
     public List<SnapshotMetadata> ListSnapshots()
     {
@@ -121,11 +118,11 @@ public class SnapshotStorage
                 var fileName = Path.GetFileNameWithoutExtension(file);
                 var version = fileName.Replace("Snapshot_", "");
                 
-                // Load the snapshot to get metadata
-                var snapshot = LoadSnapshot(version);
-                if (snapshot?.Metadata != null)
+                // 从文件内容中解析元数据（避免加载整个快照）
+                var metadata = ExtractMetadataFromFile(file, version);
+                if (metadata != null)
                 {
-                    snapshots.Add(snapshot.Metadata);
+                    snapshots.Add(metadata);
                 }
             }
             catch
@@ -172,61 +169,168 @@ public class SnapshotStorage
     }
 
     /// <summary>
-    /// 使用Roslyn编译并加载快照
+    /// 通过app.cs方式加载快照
     /// </summary>
-    private CodeFlowAnalysisSnapshot? CompileAndLoadSnapshot(string code, string version)
+    private CodeFlowAnalysisSnapshot? LoadSnapshotViaAppCs(string snapshotFilePath, string version)
     {
-        var syntaxTree = CSharpSyntaxTree.ParseText(code);
-        
-        var references = new List<MetadataReference>
+        // 创建临时工作目录
+        var tempWorkDir = Path.Combine(Path.GetTempPath(), $"netcorepal-snapshot-load-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempWorkDir);
+
+        try
         {
-            MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
-            MetadataReference.CreateFromFile(typeof(Console).Assembly.Location),
-            MetadataReference.CreateFromFile(typeof(List<>).Assembly.Location),
-            MetadataReference.CreateFromFile(typeof(CodeFlowAnalysisResult).Assembly.Location),
-            MetadataReference.CreateFromFile(typeof(CodeFlowAnalysisSnapshot).Assembly.Location),
-            MetadataReference.CreateFromFile(Assembly.Load("System.Runtime").Location),
-            MetadataReference.CreateFromFile(Assembly.Load("System.Collections").Location),
-        };
+            // 生成app.cs文件
+            var tempOutputPath = Path.Combine(tempWorkDir, "snapshot-output.json");
+            var appCsContent = GenerateSnapshotLoaderAppCs(snapshotFilePath, version, tempOutputPath);
+            var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
+            
+            File.WriteAllText(tempAppCsPath, appCsContent);
 
-        var compilation = CSharpCompilation.Create(
-            $"SnapshotAssembly_{version}",
-            new[] { syntaxTree },
-            references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
-        using var ms = new MemoryStream();
-        var result = compilation.Emit(ms);
-
-        if (!result.Success)
-        {
-            var failures = result.Diagnostics.Where(diagnostic =>
-                diagnostic.IsWarningAsError ||
-                diagnostic.Severity == DiagnosticSeverity.Error);
-
-            foreach (var diagnostic in failures)
+            // 执行app.cs
+            var processStartInfo = new System.Diagnostics.ProcessStartInfo
             {
-                Console.Error.WriteLine($"{diagnostic.Id}: {diagnostic.GetMessage()}");
+                FileName = "dotnet",
+                Arguments = $"run {tempAppCsPath} --no-launch-profile",
+                WorkingDirectory = tempWorkDir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(processStartInfo);
+            if (process == null)
+            {
+                return null;
             }
+
+            process.WaitForExit(30000); // 30 second timeout
+
+            if (process.ExitCode != 0)
+            {
+                var error = process.StandardError.ReadToEnd();
+                Console.Error.WriteLine($"Failed to load snapshot: {error}");
+                return null;
+            }
+
+            // 读取序列化的快照
+            if (!File.Exists(tempOutputPath))
+            {
+                return null;
+            }
+
+            var json = File.ReadAllText(tempOutputPath);
+            var snapshot = System.Text.Json.JsonSerializer.Deserialize<CodeFlowAnalysisSnapshot>(json,
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+                });
+
+            return snapshot;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempWorkDir))
+                {
+                    Directory.Delete(tempWorkDir, recursive: true);
+                }
+            }
+            catch
+            {
+                // Ignore cleanup errors
+            }
+        }
+    }
+
+    /// <summary>
+    /// 从.cs文件中提取元数据（解析注释）
+    /// </summary>
+    private SnapshotMetadata? ExtractMetadataFromFile(string filePath, string version)
+    {
+        try
+        {
+            var lines = File.ReadAllLines(filePath);
+            var metadata = new SnapshotMetadata { Version = version };
+
+            foreach (var line in lines.Take(20)) // Only check first 20 lines
+            {
+                if (line.Contains("Snapshot created:"))
+                {
+                    var dateStr = line.Split(new[] { "Snapshot created:" }, StringSplitOptions.None)[1].Trim();
+                    if (DateTime.TryParse(dateStr, out var timestamp))
+                    {
+                        metadata.Timestamp = timestamp;
+                    }
+                }
+                else if (line.Contains("Description:"))
+                {
+                    metadata.Description = line.Split(new[] { "Description:" }, StringSplitOptions.None)[1].Trim();
+                }
+                else if (line.Contains("NodeCount ="))
+                {
+                    var countStr = line.Split('=')[1].Trim().TrimEnd(',');
+                    if (int.TryParse(countStr, out var count))
+                    {
+                        metadata.NodeCount = count;
+                    }
+                }
+                else if (line.Contains("RelationshipCount ="))
+                {
+                    var countStr = line.Split('=')[1].Trim();
+                    if (int.TryParse(countStr, out var count))
+                    {
+                        metadata.RelationshipCount = count;
+                    }
+                }
+                else if (line.Contains("Hash ="))
+                {
+                    var hashStr = line.Split('=')[1].Trim().Trim('"').TrimEnd(',');
+                    metadata.Hash = hashStr;
+                }
+            }
+
+            return metadata;
+        }
+        catch
+        {
             return null;
         }
+    }
 
-        ms.Seek(0, SeekOrigin.Begin);
-        var assembly = Assembly.Load(ms.ToArray());
+    /// <summary>
+    /// 生成用于加载快照的app.cs文件
+    /// </summary>
+    private string GenerateSnapshotLoaderAppCs(string snapshotFilePath, string version, string outputPath)
+    {
+        var sb = new StringBuilder();
         
-        var type = assembly.GetType($"CodeAnalysisSnapshots.Snapshot_{version}");
-        if (type == null)
-        {
-            return null;
-        }
-
-        var method = type.GetMethod("BuildSnapshot", BindingFlags.Public | BindingFlags.Static);
-        if (method == null)
-        {
-            return null;
-        }
-
-        return method.Invoke(null, null) as CodeFlowAnalysisSnapshot;
+        // 复制快照文件内容
+        sb.AppendLine(File.ReadAllText(snapshotFilePath));
+        sb.AppendLine();
+        
+        // 添加加载和序列化逻辑
+        sb.AppendLine("using System.IO;");
+        sb.AppendLine("using System.Text.Json;");
+        sb.AppendLine("using System.Text.Json.Serialization;");
+        sb.AppendLine();
+        sb.AppendLine($"var snapshot = CodeAnalysisSnapshots.Snapshot_{version}.BuildSnapshot();");
+        sb.AppendLine();
+        sb.AppendLine("var options = new JsonSerializerOptions");
+        sb.AppendLine("{");
+        sb.AppendLine("    WriteIndented = true,");
+        sb.AppendLine("    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,");
+        sb.AppendLine("    Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }");
+        sb.AppendLine("};");
+        sb.AppendLine();
+        var escapedPath = outputPath.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        sb.AppendLine($"var json = JsonSerializer.Serialize(snapshot, options);");
+        sb.AppendLine($"File.WriteAllText(@\"{escapedPath}\", json);");
+        sb.AppendLine($"Console.WriteLine($\"Snapshot {version} loaded and serialized\");");
+        
+        return sb.ToString();
     }
 
     /// <summary>
