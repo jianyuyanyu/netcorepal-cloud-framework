@@ -10,6 +10,7 @@
 - **交互式HTML**：提供完整的导航、图表切换和在线编辑功能
 - **Mermaid Live集成**：一键跳转到 Mermaid Live Editor 进行在线编辑
 - **.NET 10 单文件执行**：利用 .NET 10 的单文件运行能力，动态生成和执行分析代码
+- **📊 历史记录特性**：类似 EF Core 迁移，支持版本快照、历史比较和趋势展示
 
 ## 快速开始
 
@@ -98,7 +99,107 @@ netcorepal-codeanalysis generate --project A.csproj --project B.csproj
 netcorepal-codeanalysis generate --include-tests
 ```
 
-## 工作原理
+## 历史记录特性（类似 EF Core 迁移）
+
+工具提供了版本快照功能，可以追踪架构的演进历史，类似于 Entity Framework Core 的迁移机制。
+
+### 创建快照
+
+```bash
+# 创建当前项目的架构快照
+netcorepal-codeanalysis snapshot add --description "初始版本"
+
+# 创建快照并指定存储目录
+netcorepal-codeanalysis snapshot add --description "添加订单模块" --snapshot-dir ./my-snapshots
+```
+
+### 查看快照列表
+
+```bash
+# 列出所有快照
+netcorepal-codeanalysis snapshot list
+
+# 输出示例：
+# Found 3 snapshot(s):
+#
+# Version              Timestamp              Nodes    Relationships   Description
+# ----------------------------------------------------------------------------------------------------
+# 20260116120000       2026-01-16 12:00:00    45       78              添加订单模块
+# 20260115100000       2026-01-15 10:00:00    38       65              重构用户服务
+# 20260114090000       2026-01-14 09:00:00    32       52              初始版本
+```
+
+### 查看快照详情
+
+```bash
+# 显示指定版本的快照详细信息
+netcorepal-codeanalysis snapshot show 20260116120000
+
+# 使用 --verbose 显示更详细的统计信息
+netcorepal-codeanalysis snapshot show 20260116120000 --verbose
+```
+
+### 比较快照差异
+
+```bash
+# 比较两个版本之间的差异
+netcorepal-codeanalysis snapshot diff 20260114090000 20260116120000
+
+# 与最新版本比较（省略第二个参数）
+netcorepal-codeanalysis snapshot diff 20260114090000
+
+# 输出示例：
+# Comparing snapshots:
+#   From: 20260114090000 (2026-01-14 09:00:00)
+#   To:   20260116120000 (2026-01-16 12:00:00)
+#
+# Summary:
+#   Nodes:         +13 -0 =32
+#   Relationships: +26 -0 =52
+#
+# Added Nodes (13):
+#   + [Command] CreateOrderCommand
+#   + [CommandHandler] CreateOrderCommandHandler
+#   + [Aggregate] Order
+#   ...
+```
+
+### 生成带历史记录的HTML
+
+```bash
+# 生成包含所有历史快照的交互式HTML
+netcorepal-codeanalysis generate --with-history
+
+# 指定快照目录
+netcorepal-codeanalysis generate --with-history --snapshot-dir ./my-snapshots --output history.html
+```
+
+生成的HTML页面包含：
+- 📊 **版本选择器**：可以切换查看不同版本的架构
+- 📈 **趋势图表**：展示节点数量和关系数量随时间的变化趋势
+- 🔍 **版本对比**：高亮显示版本间的差异
+- 📝 **版本信息**：显示每个版本的时间戳、描述和统计信息
+
+### 典型工作流程
+
+```bash
+# 1. 初始架构快照
+netcorepal-codeanalysis snapshot add --description "项目初始版本"
+
+# 2. 开发新功能...
+
+# 3. 创建新快照
+netcorepal-codeanalysis snapshot add --description "添加支付功能"
+
+# 4. 查看变化
+netcorepal-codeanalysis snapshot list
+netcorepal-codeanalysis snapshot diff <旧版本> <新版本>
+
+# 5. 生成历史可视化
+netcorepal-codeanalysis generate --with-history --output architecture-history.html
+```
+
+
 
 该工具采用基于 .NET 10 单文件执行能力的全新架构：
 

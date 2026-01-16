@@ -83,19 +83,36 @@ public class Program
         };
         // no short alias to avoid ambiguity
 
+        var withHistoryOption = new Option<bool>(
+            name: "--with-history",
+            description: "Generate HTML with history snapshots support")
+        {
+            IsRequired = false
+        };
+        
+        var snapshotDirOption = new Option<string>(
+            name: "--snapshot-dir",
+            description: "Snapshot directory for history mode (default: ./snapshots)")
+        {
+            IsRequired = false
+        };
+        snapshotDirOption.SetDefaultValue("snapshots");
+
         generateCommand.AddOption(solutionOption);
         generateCommand.AddOption(projectOption);
         generateCommand.AddOption(outputOption);
         generateCommand.AddOption(titleOption);
         generateCommand.AddOption(verboseOption);
         generateCommand.AddOption(includeTestsOption);
+        generateCommand.AddOption(withHistoryOption);
+        generateCommand.AddOption(snapshotDirOption);
         
 
         generateCommand.SetHandler(
-            async (solution, projects, output, title, verbose, includeTests) =>
+            async (solution, projects, output, title, verbose, includeTests, withHistory, snapshotDir) =>
             {
-                await GenerateVisualization(solution, projects, output, title, verbose, includeTests);
-            }, solutionOption, projectOption, outputOption, titleOption, verboseOption, includeTestsOption);
+                await GenerateVisualization(solution, projects, output, title, verbose, includeTests, withHistory, snapshotDir);
+            }, solutionOption, projectOption, outputOption, titleOption, verboseOption, includeTestsOption, withHistoryOption, snapshotDirOption);
 
         rootCommand.AddCommand(generateCommand);
         
@@ -107,10 +124,29 @@ public class Program
     }
 
     private static async Task GenerateVisualization(FileInfo? solutionFile, FileInfo[]? projectFiles,
-        FileInfo outputFile, string title, bool verbose, bool includeTests)
+        FileInfo outputFile, string title, bool verbose, bool includeTests, bool withHistory, string snapshotDir)
     {
         try
         {
+            // If with-history flag is set, generate HTML from snapshots
+            if (withHistory)
+            {
+                if (verbose)
+                {
+                    Console.WriteLine($"Generating HTML with history from snapshots in: {snapshotDir}");
+                }
+
+                var historyHtml = HistoryVisualizationBuilder.GenerateHistoryVisualizationHtml(
+                    snapshotDir,
+                    title);
+
+                var outputPath = Path.GetFullPath(outputFile.FullName);
+                await File.WriteAllTextAsync(outputPath, historyHtml);
+
+                Console.WriteLine($"✅ HTML visualization with history generated successfully: {outputPath}");
+                return;
+            }
+
             if (verbose)
             {
                 Console.WriteLine($"NetCorePal Code Analysis Tool v{ProjectAnalysisHelpers.GetVersion()}");
