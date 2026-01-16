@@ -22,6 +22,48 @@ public class Program
     private const int AnalysisTimeoutMinutes = 5;
     internal static IExitHandler ExitHandler { get; set; } = new EnvironmentExitHandler();
     
+    /// <summary>
+    /// Copies NuGet.config from the source directory to the destination directory if it exists.
+    /// This ensures that dotnet restore can use the same NuGet configuration as the target project.
+    /// </summary>
+    /// <param name="sourceDir">Directory to search for NuGet.config (e.g., solution or project directory)</param>
+    /// <param name="destDir">Temporary directory where app.cs will be executed</param>
+    /// <param name="verbose">Whether to print verbose output</param>
+    private static void CopyNuGetConfigIfExists(string sourceDir, string destDir, bool verbose)
+    {
+        var nugetConfigPath = Path.Combine(sourceDir, "NuGet.config");
+        if (File.Exists(nugetConfigPath))
+        {
+            var destPath = Path.Combine(destDir, "NuGet.config");
+            File.Copy(nugetConfigPath, destPath, overwrite: true);
+            if (verbose)
+            {
+                Console.WriteLine($"Copied NuGet.config from {nugetConfigPath} to {destPath}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Determines the root directory for the project(s) being analyzed.
+    /// Returns the solution directory if a solution is specified, otherwise the directory of the first project.
+    /// </summary>
+    private static string? DetermineProjectRootDirectory(FileInfo? solutionFile, IEnumerable<string> projectPaths)
+    {
+        if (solutionFile != null && solutionFile.Exists)
+        {
+            return Path.GetDirectoryName(solutionFile.FullName);
+        }
+        else
+        {
+            var firstProject = projectPaths.FirstOrDefault();
+            if (firstProject != null)
+            {
+                return Path.GetDirectoryName(firstProject);
+            }
+        }
+        return null;
+    }
+    
     
 
     public static async Task<int> Main(string[] args)
@@ -273,6 +315,14 @@ public class Program
             // Generate app.cs file in an isolated temp folder to avoid inheriting cwd/global.json
             var tempWorkDir = Path.Combine(Path.GetTempPath(), $"netcorepal-analysis-{Guid.NewGuid():N}");
             Directory.CreateDirectory(tempWorkDir);
+            
+            // Copy NuGet.config if it exists in project root directory
+            var projectRootDir = DetermineProjectRootDirectory(solutionFile, allProjects);
+            if (projectRootDir != null)
+            {
+                CopyNuGetConfigIfExists(projectRootDir, tempWorkDir, verbose);
+            }
+            
             var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
             var absoluteOutputPath = Path.GetFullPath(outputFile.FullName);
             var appCsContent = AppCsContentGenerator.GenerateAppCsContent(
@@ -714,6 +764,14 @@ public class Program
             // Generate app.cs that creates snapshot .cs file directly
             var tempWorkDir = Path.Combine(Path.GetTempPath(), $"netcorepal-snapshot-{Guid.NewGuid():N}");
             Directory.CreateDirectory(tempWorkDir);
+            
+            // Copy NuGet.config if it exists in project root directory
+            var projectRootDir = DetermineProjectRootDirectory(solutionFile, allProjects);
+            if (projectRootDir != null)
+            {
+                CopyNuGetConfigIfExists(projectRootDir, tempWorkDir, verbose);
+            }
+            
             var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
             
             // Generate app.cs that creates snapshot file
