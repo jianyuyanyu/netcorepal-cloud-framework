@@ -1,6 +1,4 @@
-using NetCorePal.Extensions.CodeAnalysis;
-
-namespace NetCorePal.Extensions.CodeAnalysis.Tools.Snapshots;
+namespace NetCorePal.Extensions.CodeAnalysis.Snapshots;
 
 /// <summary>
 /// 代码流分析快照，包含完整的分析结果和元数据

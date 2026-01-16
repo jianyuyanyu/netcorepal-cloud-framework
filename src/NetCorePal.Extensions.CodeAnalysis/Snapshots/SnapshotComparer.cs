@@ -1,8 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using NetCorePal.Extensions.CodeAnalysis;
 
-namespace NetCorePal.Extensions.CodeAnalysis.Tools.Snapshots;
+namespace NetCorePal.Extensions.CodeAnalysis.Snapshots;
 
 /// <summary>
 /// 快照差异类型

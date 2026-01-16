@@ -7,8 +7,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NetCorePal.Extensions.CodeAnalysis;
+using NetCorePal.Extensions.CodeAnalysis.Snapshots;
 
-namespace NetCorePal.Extensions.CodeAnalysis.Tools.Snapshots;
+namespace NetCorePal.Extensions.CodeAnalysis.Tools;
 
 /// <summary>
 /// 快照存储服务，负责快照的读写操作
@@ -152,6 +153,26 @@ public class SnapshotStorage
         }
 
         return LoadSnapshot(snapshots[0].Version);
+    }
+
+    /// <summary>
+    /// 加载所有快照（用于历史版本展示）
+    /// </summary>
+    public List<CodeFlowAnalysisSnapshot> LoadAllSnapshots()
+    {
+        var metadata = ListSnapshots();
+        var snapshots = new List<CodeFlowAnalysisSnapshot>();
+        
+        foreach (var meta in metadata)
+        {
+            var snapshot = LoadSnapshot(meta.Version);
+            if (snapshot != null)
+            {
+                snapshots.Add(snapshot);
+            }
+        }
+        
+        return snapshots;
     }
 
     /// <summary>

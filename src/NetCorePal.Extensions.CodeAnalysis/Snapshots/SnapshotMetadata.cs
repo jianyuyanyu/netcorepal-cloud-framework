@@ -1,6 +1,6 @@
 using System;
 
-namespace NetCorePal.Extensions.CodeAnalysis.Tools.Snapshots;
+namespace NetCorePal.Extensions.CodeAnalysis.Snapshots;
 
 /// <summary>
 /// 快照元数据，包含版本号、时间戳、描述等信息

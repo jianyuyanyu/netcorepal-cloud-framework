@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using NetCorePal.Extensions.CodeAnalysis;
-using NetCorePal.Extensions.CodeAnalysis.Tools.Snapshots;
+using NetCorePal.Extensions.CodeAnalysis.Snapshots;
+using NetCorePal.Extensions.CodeAnalysis.Tools;
 using Xunit;
 
 namespace NetCorePal.Extensions.CodeAnalysis.Tools.UnitTests;

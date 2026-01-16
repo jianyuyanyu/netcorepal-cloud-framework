@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Xml.Linq;
 using System.Text;
 using NetCorePal.Extensions.CodeAnalysis;
-using NetCorePal.Extensions.CodeAnalysis.Tools.Snapshots;
+using NetCorePal.Extensions.CodeAnalysis.Snapshots;
 
 namespace NetCorePal.Extensions.CodeAnalysis.Tools;
 
@@ -136,14 +136,25 @@ public class Program
                     Console.WriteLine($"Generating HTML with history from snapshots in: {snapshotDir}");
                 }
 
-                var historyHtml = HistoryVisualizationBuilder.GenerateHistoryVisualizationHtml(
-                    snapshotDir,
+                var storage = new SnapshotStorage(snapshotDir);
+                var snapshots = storage.LoadAllSnapshots();
+
+                if (snapshots.Count == 0)
+                {
+                    Console.Error.WriteLine("Error: No snapshots found. Please create a snapshot first using 'snapshot add' command.");
+                    ExitHandler.Exit(1);
+                    return;
+                }
+
+                var historyHtml = VisualizationHtmlBuilder.GenerateVisualizationHtmlWithHistory(
+                    snapshots,
                     title);
 
                 var outputPath = Path.GetFullPath(outputFile.FullName);
                 await File.WriteAllTextAsync(outputPath, historyHtml);
 
                 Console.WriteLine($"✅ HTML visualization with history generated successfully: {outputPath}");
+                Console.WriteLine($"  {snapshots.Count} snapshot(s) included");
                 return;
             }
 
