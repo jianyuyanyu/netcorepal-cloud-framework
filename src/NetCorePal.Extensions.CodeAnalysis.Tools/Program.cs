@@ -92,11 +92,11 @@ public class Program
         
         var snapshotDirOption = new Option<string>(
             name: "--snapshot-dir",
-            description: "Snapshot directory for history mode (default: ./snapshots)")
+            description: "Snapshot directory for history mode (default: ./Snapshots)")
         {
             IsRequired = false
         };
-        snapshotDirOption.SetDefaultValue("snapshots");
+        snapshotDirOption.SetDefaultValue("Snapshots");
 
         generateCommand.AddOption(solutionOption);
         generateCommand.AddOption(projectOption);

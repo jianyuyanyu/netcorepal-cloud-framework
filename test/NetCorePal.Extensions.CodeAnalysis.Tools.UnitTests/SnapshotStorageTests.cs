@@ -43,17 +43,23 @@ public class SnapshotStorageTests : IDisposable
     }
 
     [Fact]
-    public void SaveSnapshot_CreatesJsonFile()
+    public void SaveSnapshot_CreatesCsFile()
     {
         // Arrange
         var result = CreateSampleAnalysisResult();
 
         // Act
         var version = _storage.SaveSnapshot(result, "Test snapshot");
-        var expectedFile = Path.Combine(_tempDir, $"{version}.json");
+        var expectedFile = Path.Combine(_tempDir, $"Snapshot_{version}.cs");
 
         // Assert
         Assert.True(File.Exists(expectedFile));
+        
+        // Verify it's a valid C# file
+        var content = File.ReadAllText(expectedFile);
+        Assert.Contains("namespace CodeAnalysisSnapshots", content);
+        Assert.Contains($"class Snapshot_{version}", content);
+        Assert.Contains("BuildSnapshot()", content);
     }
 
     [Fact]

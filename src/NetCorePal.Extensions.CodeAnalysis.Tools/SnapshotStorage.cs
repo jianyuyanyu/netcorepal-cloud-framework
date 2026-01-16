@@ -2,33 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using NetCorePal.Extensions.CodeAnalysis;
 using NetCorePal.Extensions.CodeAnalysis.Snapshots;
 
 namespace NetCorePal.Extensions.CodeAnalysis.Tools;
 
 /// <summary>
-/// 快照存储服务，负责快照的读写操作
+/// 快照存储服务，负责快照的读写操作（生成.cs文件类似EF Core迁移）
 /// </summary>
 public class SnapshotStorage
 {
-    private const string DefaultSnapshotDirectory = "snapshots";
+    private const string DefaultSnapshotDirectory = "Snapshots";
     private readonly string _snapshotDirectory;
-    
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters =
-        {
-            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
-        }
-    };
 
     public SnapshotStorage(string? snapshotDirectory = null)
     {
@@ -36,7 +26,7 @@ public class SnapshotStorage
     }
 
     /// <summary>
-    /// 保存快照
+    /// 保存快照（生成.cs文件）
     /// </summary>
     public string SaveSnapshot(CodeFlowAnalysisResult analysisResult, string description, bool verbose = false)
     {
@@ -54,44 +44,42 @@ public class SnapshotStorage
         // 计算哈希值
         var hash = ComputeHash(analysisResult);
 
-        // 创建快照
-        var snapshot = new CodeFlowAnalysisSnapshot
+        // 创建快照元数据
+        var metadata = new SnapshotMetadata
         {
-            Metadata = new SnapshotMetadata
-            {
-                Version = version,
-                Timestamp = DateTime.Now,
-                Description = description,
-                Hash = hash,
-                NodeCount = analysisResult.Nodes.Count,
-                RelationshipCount = analysisResult.Relationships.Count
-            },
-            AnalysisResult = analysisResult
+            Version = version,
+            Timestamp = DateTime.Now,
+            Description = description,
+            Hash = hash,
+            NodeCount = analysisResult.Nodes.Count,
+            RelationshipCount = analysisResult.Relationships.Count
         };
 
-        // 保存到文件
-        var fileName = $"{version}.json";
+        // 生成C#代码
+        var csharpCode = SnapshotCodeGenerator.GenerateSnapshotClass(analysisResult, metadata);
+        
+        // 保存到.cs文件
+        var fileName = $"Snapshot_{version}.cs";
         var filePath = Path.Combine(_snapshotDirectory, fileName);
-        var json = JsonSerializer.Serialize(snapshot, JsonOptions);
-        File.WriteAllText(filePath, json);
+        File.WriteAllText(filePath, csharpCode);
 
         if (verbose)
         {
             Console.WriteLine($"Snapshot saved: {filePath}");
             Console.WriteLine($"  Version: {version}");
-            Console.WriteLine($"  Nodes: {snapshot.Metadata.NodeCount}");
-            Console.WriteLine($"  Relationships: {snapshot.Metadata.RelationshipCount}");
+            Console.WriteLine($"  Nodes: {metadata.NodeCount}");
+            Console.WriteLine($"  Relationships: {metadata.RelationshipCount}");
         }
 
         return version;
     }
 
     /// <summary>
-    /// 加载指定版本的快照
+    /// 加载指定版本的快照（从.cs文件编译加载）
     /// </summary>
     public CodeFlowAnalysisSnapshot? LoadSnapshot(string version)
     {
-        var fileName = $"{version}.json";
+        var fileName = $"Snapshot_{version}.cs";
         var filePath = Path.Combine(_snapshotDirectory, fileName);
 
         if (!File.Exists(filePath))
@@ -99,8 +87,16 @@ public class SnapshotStorage
             return null;
         }
 
-        var json = File.ReadAllText(filePath);
-        return JsonSerializer.Deserialize<CodeFlowAnalysisSnapshot>(json, JsonOptions);
+        try
+        {
+            var code = File.ReadAllText(filePath);
+            return CompileAndLoadSnapshot(code, version);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error loading snapshot {version}: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -113,7 +109,7 @@ public class SnapshotStorage
             return new List<SnapshotMetadata>();
         }
 
-        var files = Directory.GetFiles(_snapshotDirectory, "*.json")
+        var files = Directory.GetFiles(_snapshotDirectory, "Snapshot_*.cs")
             .OrderByDescending(f => f);
 
         var snapshots = new List<SnapshotMetadata>();
@@ -121,20 +117,20 @@ public class SnapshotStorage
         {
             try
             {
-                var json = File.ReadAllText(file);
-                var snapshot = JsonSerializer.Deserialize<CodeFlowAnalysisSnapshot>(json, JsonOptions);
+                // Extract version from filename
+                var fileName = Path.GetFileNameWithoutExtension(file);
+                var version = fileName.Replace("Snapshot_", "");
+                
+                // Load the snapshot to get metadata
+                var snapshot = LoadSnapshot(version);
                 if (snapshot?.Metadata != null)
                 {
                     snapshots.Add(snapshot.Metadata);
                 }
             }
-            catch (System.Text.Json.JsonException)
+            catch
             {
-                // Skip files that cannot be parsed as valid snapshots
-            }
-            catch (IOException)
-            {
-                // Skip files that cannot be read
+                // Skip files that cannot be loaded
             }
         }
 
@@ -173,6 +169,64 @@ public class SnapshotStorage
         }
         
         return snapshots;
+    }
+
+    /// <summary>
+    /// 使用Roslyn编译并加载快照
+    /// </summary>
+    private CodeFlowAnalysisSnapshot? CompileAndLoadSnapshot(string code, string version)
+    {
+        var syntaxTree = CSharpSyntaxTree.ParseText(code);
+        
+        var references = new List<MetadataReference>
+        {
+            MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(Console).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(List<>).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(CodeFlowAnalysisResult).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(CodeFlowAnalysisSnapshot).Assembly.Location),
+            MetadataReference.CreateFromFile(Assembly.Load("System.Runtime").Location),
+            MetadataReference.CreateFromFile(Assembly.Load("System.Collections").Location),
+        };
+
+        var compilation = CSharpCompilation.Create(
+            $"SnapshotAssembly_{version}",
+            new[] { syntaxTree },
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        using var ms = new MemoryStream();
+        var result = compilation.Emit(ms);
+
+        if (!result.Success)
+        {
+            var failures = result.Diagnostics.Where(diagnostic =>
+                diagnostic.IsWarningAsError ||
+                diagnostic.Severity == DiagnosticSeverity.Error);
+
+            foreach (var diagnostic in failures)
+            {
+                Console.Error.WriteLine($"{diagnostic.Id}: {diagnostic.GetMessage()}");
+            }
+            return null;
+        }
+
+        ms.Seek(0, SeekOrigin.Begin);
+        var assembly = Assembly.Load(ms.ToArray());
+        
+        var type = assembly.GetType($"CodeAnalysisSnapshots.Snapshot_{version}");
+        if (type == null)
+        {
+            return null;
+        }
+
+        var method = type.GetMethod("BuildSnapshot", BindingFlags.Public | BindingFlags.Static);
+        if (method == null)
+        {
+            return null;
+        }
+
+        return method.Invoke(null, null) as CodeFlowAnalysisSnapshot;
     }
 
     /// <summary>
