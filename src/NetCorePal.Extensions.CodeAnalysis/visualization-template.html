@@ -623,14 +623,16 @@
             }
         });
 
+        // 快照数据（包含元数据、分析结果和统计信息）
+        const snapshots = {{SNAPSHOTS}};
+        
+        // 使用最新快照（第一个）的数据
+        const currentSnapshot = snapshots[0];
+        const statistics = currentSnapshot.statistics;
+        const analysisResult = currentSnapshot.analysisResult;
+        
         // 图表配置
         const diagramConfigs = {{DIAGRAM_CONFIGS}};
-        
-        // 统计数据
-        const statistics = {{STATISTICS}};
-        
-        // 分析结果数据
-        const analysisResult = {{ANALYSIS_RESULT}};
         
         // Mermaid图表数据
         const diagrams = {{DIAGRAMS}};
