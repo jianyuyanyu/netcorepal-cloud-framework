@@ -131,8 +131,7 @@ public class Program
             // Try to generate HTML with history if enabled (default)
             if (withHistory)
             {
-                var storage = new SnapshotStorage(snapshotDir);
-                var snapshots = storage.LoadAllSnapshots();
+                var snapshots = LoadAllSnapshotFiles(snapshotDir);
 
                 if (snapshots.Count > 0)
                 {
@@ -715,7 +714,7 @@ public class Program
             var tempOutputPath = Path.Combine(tempWorkDir, "analysis-result.json");
             
             // Generate app.cs that outputs JSON instead of HTML
-            var appCsContent = GenerateSnapshotAppCsContent(allProjects.ToList(), tempOutputPath);
+            var appCsContent = SnapshotAppCsGenerator.GenerateSnapshotAppCsContent(allProjects.ToList(), tempOutputPath);
             await File.WriteAllTextAsync(tempAppCsPath, appCsContent);
 
             try
@@ -798,8 +797,7 @@ public class Program
                 }
 
                 // Save snapshot
-                var storage = new SnapshotStorage(snapshotDir);
-                var version = storage.SaveSnapshot(analysisResult, description, verbose);
+                var version = SaveSnapshotToFile(analysisResult, description, snapshotDir, verbose);
 
                 Console.WriteLine($"✅ Snapshot created successfully: {version}");
                 Console.WriteLine($"  Description: {description}");
@@ -837,8 +835,7 @@ public class Program
     {
         try
         {
-            var storage = new SnapshotStorage(snapshotDir);
-            var snapshots = storage.ListSnapshots();
+            var snapshots = ListSnapshotFiles(snapshotDir);
 
             if (snapshots.Count == 0)
             {
@@ -871,8 +868,7 @@ public class Program
     {
         try
         {
-            var storage = new SnapshotStorage(snapshotDir);
-            var snapshot = storage.LoadSnapshot(version);
+            var snapshot = LoadSnapshotFile(version, snapshotDir);
 
             if (snapshot == null)
             {
@@ -923,61 +919,330 @@ public class Program
         }
     }
 
-    private static string GenerateSnapshotAppCsContent(List<string> projectPaths, string outputPath)
+    // Helper methods for snapshot operations (extracted from SnapshotStorage)
+    
+    private static string SaveSnapshotToFile(CodeFlowAnalysisResult analysisResult, string description, string snapshotDir, bool verbose)
     {
-        var sb = new StringBuilder();
-
-        // Add #:project directives
-        foreach (var projectPath in projectPaths)
+        // 创建快照目录
+        if (!Directory.Exists(snapshotDir))
         {
-            sb.AppendLine($"#:project {projectPath}");
+            Directory.CreateDirectory(snapshotDir);
+            if (verbose)
+                Console.WriteLine($"Created snapshot directory: {snapshotDir}");
         }
 
+        // 生成版本号（基于时间戳）
+        var version = DateTime.Now.ToString("yyyyMMddHHmmss");
+        
+        // 计算哈希值
+        var hash = ComputeSnapshotHash(analysisResult);
+
+        // 创建快照元数据
+        var metadata = new SnapshotMetadata
+        {
+            Version = version,
+            Timestamp = DateTime.Now,
+            Description = description,
+            Hash = hash,
+            NodeCount = analysisResult.Nodes.Count,
+            RelationshipCount = analysisResult.Relationships.Count
+        };
+
+        // 生成C#代码
+        var csharpCode = SnapshotCodeGenerator.GenerateSnapshotClass(analysisResult, metadata);
+        
+        // 保存到.cs文件
+        var fileName = $"Snapshot_{version}.cs";
+        var filePath = Path.Combine(snapshotDir, fileName);
+        File.WriteAllText(filePath, csharpCode);
+
+        if (verbose)
+        {
+            Console.WriteLine($"Snapshot saved: {filePath}");
+            Console.WriteLine($"  Version: {version}");
+            Console.WriteLine($"  Nodes: {metadata.NodeCount}");
+            Console.WriteLine($"  Relationships: {metadata.RelationshipCount}");
+        }
+
+        return version;
+    }
+
+    private static List<SnapshotMetadata> ListSnapshotFiles(string snapshotDir)
+    {
+        if (!Directory.Exists(snapshotDir))
+        {
+            return new List<SnapshotMetadata>();
+        }
+
+        var files = Directory.GetFiles(snapshotDir, "Snapshot_*.cs")
+            .OrderByDescending(f => f);
+
+        var snapshots = new List<SnapshotMetadata>();
+        foreach (var file in files)
+        {
+            try
+            {
+                // Extract version from filename
+                var fileName = Path.GetFileNameWithoutExtension(file);
+                var version = fileName.Replace("Snapshot_", "");
+                
+                // 从文件内容中解析元数据（避免加载整个快照）
+                var metadata = ExtractMetadataFromSnapshotFile(file, version);
+                if (metadata != null)
+                {
+                    snapshots.Add(metadata);
+                }
+            }
+            catch
+            {
+                // Skip files that cannot be loaded
+            }
+        }
+
+        return snapshots;
+    }
+
+    private static CodeFlowAnalysisSnapshot? LoadSnapshotFile(string version, string snapshotDir)
+    {
+        var fileName = $"Snapshot_{version}.cs";
+        var filePath = Path.Combine(snapshotDir, fileName);
+
+        if (!File.Exists(filePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            // 使用app.cs方式加载快照
+            return LoadSnapshotViaAppCs(filePath, version);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error loading snapshot {version}: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static List<CodeFlowAnalysisSnapshot> LoadAllSnapshotFiles(string snapshotDir)
+    {
+        var metadata = ListSnapshotFiles(snapshotDir);
+        var snapshots = new List<CodeFlowAnalysisSnapshot>();
+        
+        foreach (var meta in metadata)
+        {
+            var snapshot = LoadSnapshotFile(meta.Version, snapshotDir);
+            if (snapshot != null)
+            {
+                snapshots.Add(snapshot);
+            }
+        }
+        
+        return snapshots;
+    }
+
+    private static CodeFlowAnalysisSnapshot? LoadSnapshotViaAppCs(string snapshotFilePath, string version)
+    {
+        // 创建临时工作目录
+        var tempWorkDir = Path.Combine(Path.GetTempPath(), $"netcorepal-snapshot-load-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempWorkDir);
+
+        try
+        {
+            // 生成app.cs文件
+            var tempOutputPath = Path.Combine(tempWorkDir, "snapshot-output.json");
+            var appCsContent = GenerateSnapshotLoaderAppCs(snapshotFilePath, version, tempOutputPath);
+            var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
+            
+            File.WriteAllText(tempAppCsPath, appCsContent);
+
+            // 执行app.cs
+            var processStartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = $"run {tempAppCsPath} --no-launch-profile",
+                WorkingDirectory = tempWorkDir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(processStartInfo);
+            if (process == null)
+            {
+                Console.Error.WriteLine("Failed to start dotnet process for snapshot loading");
+                return null;
+            }
+
+            var output = new StringBuilder();
+            var error = new StringBuilder();
+            
+            process.OutputDataReceived += (sender, e) => { if (e.Data != null) output.AppendLine(e.Data); };
+            process.ErrorDataReceived += (sender, e) => { if (e.Data != null) error.AppendLine(e.Data); };
+            
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            
+            process.WaitForExit(60000); // 60 second timeout
+
+            if (process.ExitCode != 0)
+            {
+                Console.Error.WriteLine($"Failed to load snapshot (exit code {process.ExitCode}):");
+                Console.Error.WriteLine($"Output: {output}");
+                Console.Error.WriteLine($"Error: {error}");
+                return null;
+            }
+
+            // 读取序列化的快照
+            if (!File.Exists(tempOutputPath))
+            {
+                Console.Error.WriteLine($"Output file not created: {tempOutputPath}");
+                Console.Error.WriteLine($"Process output: {output}");
+                return null;
+            }
+
+            var json = File.ReadAllText(tempOutputPath);
+            var snapshot = System.Text.Json.JsonSerializer.Deserialize<CodeFlowAnalysisSnapshot>(json,
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+                });
+
+            return snapshot;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempWorkDir))
+                {
+                    Directory.Delete(tempWorkDir, recursive: true);
+                }
+            }
+            catch
+            {
+                // Ignore cleanup errors
+            }
+        }
+    }
+
+    private static string GenerateSnapshotLoaderAppCs(string snapshotFilePath, string version, string outputPath)
+    {
+        var sb = new StringBuilder();
+        
+        // 添加项目引用（需要引用CodeAnalysis项目来加载快照类型）
+        var codeAnalysisAssemblyPath = typeof(CodeFlowAnalysisResult).Assembly.Location;
+        var codeAnalysisProjectPath = Path.Combine(
+            Path.GetDirectoryName(codeAnalysisAssemblyPath)!,
+            "..", "..", "..", "..", "..",
+            "src", "NetCorePal.Extensions.CodeAnalysis", "NetCorePal.Extensions.CodeAnalysis.csproj"
+        );
+        var resolvedProjectPath = Path.GetFullPath(codeAnalysisProjectPath);
+        
+        if (File.Exists(resolvedProjectPath))
+        {
+            sb.AppendLine($"#:project {resolvedProjectPath}");
+            sb.AppendLine();
+        }
+        
+        // 复制快照文件内容
+        sb.AppendLine(File.ReadAllText(snapshotFilePath));
         sb.AppendLine();
-        sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis;");
+        
+        // 添加加载和序列化逻辑
         sb.AppendLine("using System.IO;");
-        sb.AppendLine("using System.Linq;");
-        sb.AppendLine("using System.Reflection;");
         sb.AppendLine("using System.Text.Json;");
         sb.AppendLine("using System.Text.Json.Serialization;");
         sb.AppendLine();
-        sb.AppendLine("var baseDir = AppDomain.CurrentDomain.BaseDirectory;");
-
-        var assemblyNames = projectPaths
-            .Select(p => Path.GetFileNameWithoutExtension(p) + ".dll")
-            .Distinct()
-            .ToList();
-
-        sb.AppendLine("var assemblyNames = new[]");
-        sb.AppendLine("{");
-        foreach (var assemblyName in assemblyNames)
-        {
-            sb.AppendLine($"    \"{assemblyName}\",");
-        }
-        sb.AppendLine("};");
+        sb.AppendLine($"var snapshot = CodeAnalysisSnapshots.Snapshot_{version}.BuildSnapshot();");
         sb.AppendLine();
-
-        sb.AppendLine("var assemblies = assemblyNames");
-        sb.AppendLine("    .Select(name => Path.Combine(baseDir, name))");
-        sb.AppendLine("    .Where(File.Exists)");
-        sb.AppendLine("    .Select(Assembly.LoadFrom)");
-        sb.AppendLine("    .Distinct()");
-        sb.AppendLine("    .ToArray();");
-        sb.AppendLine();
-
-        sb.AppendLine("var result = CodeFlowAnalysisHelper.GetResultFromAssemblies(assemblies);");
-        sb.AppendLine();
-
-        var escapedOutputPath = outputPath.Replace("\\", "\\\\").Replace("\"", "\\\"");
         sb.AppendLine("var options = new JsonSerializerOptions");
         sb.AppendLine("{");
         sb.AppendLine("    WriteIndented = true,");
         sb.AppendLine("    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,");
         sb.AppendLine("    Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }");
         sb.AppendLine("};");
-        sb.AppendLine($"var json = JsonSerializer.Serialize(result, options);");
-        sb.AppendLine($"File.WriteAllText(@\"{escapedOutputPath}\", json);");
-
+        sb.AppendLine();
+        var escapedPath = outputPath.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        sb.AppendLine($"var json = JsonSerializer.Serialize(snapshot, options);");
+        sb.AppendLine($"File.WriteAllText(@\"{escapedPath}\", json);");
+        sb.AppendLine($"Console.WriteLine($\"Snapshot {version} loaded and serialized\");");
+        
         return sb.ToString();
+    }
+
+    private static SnapshotMetadata? ExtractMetadataFromSnapshotFile(string filePath, string version)
+    {
+        try
+        {
+            var lines = File.ReadAllLines(filePath);
+            var metadata = new SnapshotMetadata { Version = version };
+
+            foreach (var line in lines.Take(20)) // Only check first 20 lines
+            {
+                if (line.Contains("Snapshot created:"))
+                {
+                    var dateStr = line.Split(new[] { "Snapshot created:" }, StringSplitOptions.None)[1].Trim();
+                    if (DateTime.TryParse(dateStr, out var timestamp))
+                    {
+                        metadata.Timestamp = timestamp;
+                    }
+                }
+                else if (line.Contains("Description:"))
+                {
+                    metadata.Description = line.Split(new[] { "Description:" }, StringSplitOptions.None)[1].Trim();
+                }
+                else if (line.Contains("NodeCount ="))
+                {
+                    var countStr = line.Split('=')[1].Trim().TrimEnd(',');
+                    if (int.TryParse(countStr, out var count))
+                    {
+                        metadata.NodeCount = count;
+                    }
+                }
+                else if (line.Contains("RelationshipCount ="))
+                {
+                    var countStr = line.Split('=')[1].Trim();
+                    if (int.TryParse(countStr, out var count))
+                    {
+                        metadata.RelationshipCount = count;
+                    }
+                }
+                else if (line.Contains("Hash ="))
+                {
+                    var hashStr = line.Split('=')[1].Trim().Trim('"').TrimEnd(',');
+                    metadata.Hash = hashStr;
+                }
+            }
+
+            return metadata;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string ComputeSnapshotHash(CodeFlowAnalysisResult analysisResult)
+    {
+        var sb = new StringBuilder();
+        
+        // 对节点排序后计算哈希
+        foreach (var node in analysisResult.Nodes.OrderBy(n => n.Id))
+        {
+            sb.Append($"{node.Id}|{node.Name}|{node.Type}|");
+        }
+        
+        // 对关系排序后计算哈希
+        foreach (var rel in analysisResult.Relationships.OrderBy(r => r.FromNode.Id).ThenBy(r => r.ToNode.Id))
+        {
+            sb.Append($"{rel.FromNode.Id}->{rel.ToNode.Id}|{rel.Type}|");
+        }
+
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 }
