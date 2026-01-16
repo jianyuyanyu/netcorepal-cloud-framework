@@ -201,21 +201,34 @@ public class SnapshotStorage
             using var process = System.Diagnostics.Process.Start(processStartInfo);
             if (process == null)
             {
+                Console.Error.WriteLine("Failed to start dotnet process for snapshot loading");
                 return null;
             }
 
-            process.WaitForExit(30000); // 30 second timeout
+            var output = new StringBuilder();
+            var error = new StringBuilder();
+            
+            process.OutputDataReceived += (sender, e) => { if (e.Data != null) output.AppendLine(e.Data); };
+            process.ErrorDataReceived += (sender, e) => { if (e.Data != null) error.AppendLine(e.Data); };
+            
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            
+            process.WaitForExit(60000); // 60 second timeout
 
             if (process.ExitCode != 0)
             {
-                var error = process.StandardError.ReadToEnd();
-                Console.Error.WriteLine($"Failed to load snapshot: {error}");
+                Console.Error.WriteLine($"Failed to load snapshot (exit code {process.ExitCode}):");
+                Console.Error.WriteLine($"Output: {output}");
+                Console.Error.WriteLine($"Error: {error}");
                 return null;
             }
 
             // 读取序列化的快照
             if (!File.Exists(tempOutputPath))
             {
+                Console.Error.WriteLine($"Output file not created: {tempOutputPath}");
+                Console.Error.WriteLine($"Process output: {output}");
                 return null;
             }
 
@@ -306,6 +319,21 @@ public class SnapshotStorage
     private string GenerateSnapshotLoaderAppCs(string snapshotFilePath, string version, string outputPath)
     {
         var sb = new StringBuilder();
+        
+        // 添加项目引用（需要引用CodeAnalysis项目来加载快照类型）
+        var codeAnalysisAssemblyPath = typeof(CodeFlowAnalysisResult).Assembly.Location;
+        var codeAnalysisProjectPath = Path.Combine(
+            Path.GetDirectoryName(codeAnalysisAssemblyPath)!,
+            "..", "..", "..", "..", "..",
+            "src", "NetCorePal.Extensions.CodeAnalysis", "NetCorePal.Extensions.CodeAnalysis.csproj"
+        );
+        var resolvedProjectPath = Path.GetFullPath(codeAnalysisProjectPath);
+        
+        if (File.Exists(resolvedProjectPath))
+        {
+            sb.AppendLine($"#:project {resolvedProjectPath}");
+            sb.AppendLine();
+        }
         
         // 复制快照文件内容
         sb.AppendLine(File.ReadAllText(snapshotFilePath));
