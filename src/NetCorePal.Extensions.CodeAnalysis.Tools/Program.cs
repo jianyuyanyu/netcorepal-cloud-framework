@@ -922,7 +922,7 @@ public class Program
         };
 
         // 生成C#代码
-        var csharpCode = SnapshotCodeGenerator.GenerateSnapshotClass(analysisResult, metadata);
+        var csharpCode = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(analysisResult, metadata);
         
         // 保存到.cs文件
         var fileName = $"Snapshot_{version}.cs";

@@ -74,20 +74,12 @@ public static class SnapshotAppCsGenerator
         var escapedSnapshotDir = snapshotDir.Replace("\\", "\\\\").Replace("\"", "\\\"");
         var escapedDescription = description.Replace("\\", "\\\\").Replace("\"", "\\\"");
         
-        sb.AppendLine("// 创建快照元数据");
-        sb.AppendLine("var metadata = new SnapshotMetadata");
-        sb.AppendLine("{");
-        sb.AppendLine($"    Version = \"{version}\",");
-        sb.AppendLine("    Timestamp = DateTime.Now,");
-        sb.AppendLine($"    Description = \"{escapedDescription}\",");
-        sb.AppendLine("    Hash = ComputeHash(result),");
-        sb.AppendLine("    NodeCount = result.Nodes.Count,");
-        sb.AppendLine("    RelationshipCount = result.Relationships.Count");
-        sb.AppendLine("};");
+        sb.AppendLine("// 创建快照实例");
+        sb.AppendLine($"var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(result, \"{escapedDescription}\", \"{version}\");");
         sb.AppendLine();
         
         sb.AppendLine("// 生成快照C#代码");
-        sb.AppendLine("var snapshotCode = SnapshotCodeGenerator.GenerateSnapshotClass(result, metadata);");
+        sb.AppendLine("var snapshotCode = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(snapshot);");
         sb.AppendLine();
         
         sb.AppendLine("// 保存快照文件");
@@ -102,28 +94,9 @@ public static class SnapshotAppCsGenerator
         sb.AppendLine("File.WriteAllText(filePath, snapshotCode);");
         sb.AppendLine();
         sb.AppendLine("Console.WriteLine($\"快照文件已生成: {{filePath}}\");");
-        sb.AppendLine("Console.WriteLine($\"  版本: {metadata.Version}\");");
-        sb.AppendLine("Console.WriteLine($\"  节点数: {metadata.NodeCount}\");");
-        sb.AppendLine("Console.WriteLine($\"  关系数: {metadata.RelationshipCount}\");");
-        sb.AppendLine();
-        
-        // 添加计算哈希的辅助函数
-        sb.AppendLine("// 计算哈希值的辅助函数");
-        sb.AppendLine("static string ComputeHash(CodeFlowAnalysisResult analysisResult)");
-        sb.AppendLine("{");
-        sb.AppendLine("    var sb = new System.Text.StringBuilder();");
-        sb.AppendLine("    foreach (var node in analysisResult.Nodes.OrderBy(n => n.Id))");
-        sb.AppendLine("    {");
-        sb.AppendLine("        sb.Append($\"{node.Id}|{node.Name}|{node.Type}|\");");
-        sb.AppendLine("    }");
-        sb.AppendLine("    foreach (var rel in analysisResult.Relationships.OrderBy(r => r.FromNode.Id).ThenBy(r => r.ToNode.Id))");
-        sb.AppendLine("    {");
-        sb.AppendLine("        sb.Append($\"{rel.FromNode.Id}->{rel.ToNode.Id}|{rel.Type}|\");");
-        sb.AppendLine("    }");
-        sb.AppendLine("    using var sha256 = System.Security.Cryptography.SHA256.Create();");
-        sb.AppendLine("    var hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));");
-        sb.AppendLine("    return Convert.ToHexString(hashBytes).ToLowerInvariant();");
-        sb.AppendLine("}");
+        sb.AppendLine("Console.WriteLine($\"  版本: {snapshot.Metadata.Version}\");");
+        sb.AppendLine("Console.WriteLine($\"  节点数: {snapshot.Metadata.NodeCount}\");");
+        sb.AppendLine("Console.WriteLine($\"  关系数: {snapshot.Metadata.RelationshipCount}\");");
 
         return sb.ToString();
     }
