@@ -23,22 +23,98 @@ public class Program
     internal static IExitHandler ExitHandler { get; set; } = new EnvironmentExitHandler();
     
     /// <summary>
-    /// Copies NuGet.config from the source directory to the destination directory if it exists.
-    /// This ensures that dotnet restore can use the same NuGet configuration as the target project.
+    /// Searches for NuGet.config file starting from current directory and walking up the directory tree.
+    /// Also searches in the project root directory if specified.
+    /// Returns the path to the found NuGet.config, or null if not found.
     /// </summary>
-    /// <param name="sourceDir">Directory to search for NuGet.config (e.g., solution or project directory)</param>
+    /// <param name="projectRootDir">Optional project root directory (solution or project directory)</param>
+    /// <param name="verbose">Whether to print verbose output</param>
+    /// <returns>Path to NuGet.config if found, otherwise null</returns>
+    private static string? FindNuGetConfig(string? projectRootDir, bool verbose)
+    {
+        var searchedDirs = new List<string>();
+        
+        // Strategy 1: Search from current directory up the tree
+        var currentDir = Directory.GetCurrentDirectory();
+        if (verbose)
+        {
+            Console.WriteLine($"Searching for NuGet.config...");
+            Console.WriteLine($"  Current directory: {currentDir}");
+        }
+        
+        var dir = currentDir;
+        while (!string.IsNullOrEmpty(dir))
+        {
+            var nugetConfigPath = Path.Combine(dir, "NuGet.config");
+            searchedDirs.Add(dir);
+            
+            if (verbose)
+            {
+                Console.WriteLine($"  Checking: {nugetConfigPath}");
+            }
+            
+            if (File.Exists(nugetConfigPath))
+            {
+                if (verbose)
+                {
+                    Console.WriteLine($"  ✓ Found NuGet.config at: {nugetConfigPath}");
+                }
+                return nugetConfigPath;
+            }
+            
+            var parentDir = Path.GetDirectoryName(dir);
+            if (parentDir == dir || string.IsNullOrEmpty(parentDir))
+            {
+                break; // Reached root
+            }
+            dir = parentDir;
+        }
+        
+        // Strategy 2: Check project root directory if specified and not already searched
+        if (!string.IsNullOrEmpty(projectRootDir) && !searchedDirs.Contains(projectRootDir))
+        {
+            var nugetConfigPath = Path.Combine(projectRootDir, "NuGet.config");
+            if (verbose)
+            {
+                Console.WriteLine($"  Checking project root: {nugetConfigPath}");
+            }
+            
+            if (File.Exists(nugetConfigPath))
+            {
+                if (verbose)
+                {
+                    Console.WriteLine($"  ✓ Found NuGet.config at: {nugetConfigPath}");
+                }
+                return nugetConfigPath;
+            }
+        }
+        
+        if (verbose)
+        {
+            Console.WriteLine($"  ✗ NuGet.config not found in any searched directories");
+        }
+        
+        return null;
+    }
+    
+    /// <summary>
+    /// Copies NuGet.config to the destination directory if found.
+    /// Searches from current directory up the tree, and also checks project root.
+    /// </summary>
+    /// <param name="projectRootDir">Optional project root directory (solution or project directory)</param>
     /// <param name="destDir">Temporary directory where app.cs will be executed</param>
     /// <param name="verbose">Whether to print verbose output</param>
-    private static void CopyNuGetConfigIfExists(string sourceDir, string destDir, bool verbose)
+    private static void CopyNuGetConfigIfExists(string? projectRootDir, string destDir, bool verbose)
     {
-        var nugetConfigPath = Path.Combine(sourceDir, "NuGet.config");
-        if (File.Exists(nugetConfigPath))
+        var nugetConfigPath = FindNuGetConfig(projectRootDir, verbose);
+        
+        if (nugetConfigPath != null)
         {
             var destPath = Path.Combine(destDir, "NuGet.config");
             File.Copy(nugetConfigPath, destPath, overwrite: true);
             if (verbose)
             {
-                Console.WriteLine($"Copied NuGet.config from {nugetConfigPath} to {destPath}");
+                Console.WriteLine($"  → Copied NuGet.config to: {destPath}");
             }
         }
     }
@@ -316,12 +392,9 @@ public class Program
             var tempWorkDir = Path.Combine(Path.GetTempPath(), $"netcorepal-analysis-{Guid.NewGuid():N}");
             Directory.CreateDirectory(tempWorkDir);
             
-            // Copy NuGet.config if it exists in project root directory
+            // Copy NuGet.config if it exists (searches current dir and parents, plus project root)
             var projectRootDir = DetermineProjectRootDirectory(solutionFile, allProjects);
-            if (projectRootDir != null)
-            {
-                CopyNuGetConfigIfExists(projectRootDir, tempWorkDir, verbose);
-            }
+            CopyNuGetConfigIfExists(projectRootDir, tempWorkDir, verbose);
             
             var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
             var absoluteOutputPath = Path.GetFullPath(outputFile.FullName);
@@ -765,12 +838,9 @@ public class Program
             var tempWorkDir = Path.Combine(Path.GetTempPath(), $"netcorepal-snapshot-{Guid.NewGuid():N}");
             Directory.CreateDirectory(tempWorkDir);
             
-            // Copy NuGet.config if it exists in project root directory
+            // Copy NuGet.config if it exists (searches current dir and parents, plus project root)
             var projectRootDir = DetermineProjectRootDirectory(solutionFile, allProjects);
-            if (projectRootDir != null)
-            {
-                CopyNuGetConfigIfExists(projectRootDir, tempWorkDir, verbose);
-            }
+            CopyNuGetConfigIfExists(projectRootDir, tempWorkDir, verbose);
             
             var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
             
