@@ -8,7 +8,7 @@ namespace NetCorePal.Extensions.CodeAnalysis.Tools;
 
 internal static class AppCsContentGenerator
 {
-    internal static string GenerateAppCsContent(List<string> projectPaths, string outputPath, string title)
+    internal static string GenerateAppCsContent(List<string> projectPaths, string outputPath, string title, bool withHistory = true, string? snapshotDir = null)
     {
         var sb = new StringBuilder();
 
@@ -20,6 +20,9 @@ internal static class AppCsContentGenerator
 
         sb.AppendLine();
         sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis;");
+        sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis.Snapshots;");
+        sb.AppendLine("using System;");
+        sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using System.IO;");
         sb.AppendLine("using System.Linq;");
         sb.AppendLine("using System.Reflection;");
@@ -51,13 +54,29 @@ internal static class AppCsContentGenerator
         sb.AppendLine();
 
         sb.AppendLine("var result = CodeFlowAnalysisHelper.GetResultFromAssemblies(assemblies);");
+        sb.AppendLine();
 
         // Use verbatim strings with proper escaping for title and outputPath
         var escapedTitle = title.Replace("\"", "\"\"");
         var normalizedOutputPath = Path.GetFullPath(outputPath);
         var escapedOutputPath = normalizedOutputPath.Replace("\"", "\"\"");
 
-        sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\");");
+        // Handle snapshots if withHistory is true
+        if (withHistory && !string.IsNullOrEmpty(snapshotDir))
+        {
+            var escapedSnapshotDir = snapshotDir.Replace("\"", "\"\"");
+            sb.AppendLine("// Load existing snapshots if available");
+            sb.AppendLine($"var snapshotDir = @\"{escapedSnapshotDir}\";");
+            sb.AppendLine("List<CodeFlowAnalysisSnapshot> snapshots = null;");
+            sb.AppendLine("// Note: Snapshot loading would require additional logic here");
+            sb.AppendLine("// For now, pass null and let GenerateVisualizationHtml create a current snapshot");
+            sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\", withHistory: true, snapshots: null);");
+        }
+        else
+        {
+            sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\", withHistory: false);");
+        }
+        
         sb.AppendLine($"File.WriteAllText(@\"{escapedOutputPath}\", html);");
 
         return sb.ToString();

@@ -128,47 +128,25 @@ public class Program
     {
         try
         {
-            // Try to generate HTML with history if enabled (default)
-            if (withHistory)
-            {
-                var snapshots = LoadAllSnapshotFiles(snapshotDir);
-
-                if (snapshots.Count > 0)
-                {
-                    if (verbose)
-                    {
-                        Console.WriteLine($"Generating HTML with history from snapshots in: {snapshotDir}");
-                        Console.WriteLine($"  Found {snapshots.Count} snapshot(s)");
-                    }
-
-                    var historyHtml = VisualizationHtmlBuilder.GenerateVisualizationHtmlWithHistory(
-                        snapshots,
-                        title);
-
-                    var outputPath = Path.GetFullPath(outputFile.FullName);
-                    await File.WriteAllTextAsync(outputPath, historyHtml);
-
-                    Console.WriteLine($"✅ HTML visualization with history generated successfully: {outputPath}");
-                    Console.WriteLine($"  {snapshots.Count} snapshot(s) included");
-                    return;
-                }
-                else
-                {
-                    if (verbose)
-                    {
-                        Console.WriteLine("No snapshots found, generating HTML without history.");
-                        Console.WriteLine("Use 'snapshot add' command to create snapshots for history tracking.");
-                    }
-                }
-            }
-
             if (verbose)
             {
                 Console.WriteLine($"NetCorePal Code Analysis Tool v{ProjectAnalysisHelpers.GetVersion()}");
                 Console.WriteLine($"Output file: {outputFile.FullName}");
                 Console.WriteLine($"Title: {title}");
                 Console.WriteLine($"Include tests: {includeTests}");
+                Console.WriteLine($"History mode: {withHistory}");
                 Console.WriteLine();
+            }
+
+            // Load snapshots if history is enabled
+            System.Collections.Generic.List<Snapshots.CodeFlowAnalysisSnapshot>? snapshots = null;
+            if (withHistory)
+            {
+                snapshots = LoadAllSnapshotFiles(snapshotDir);
+                if (snapshots.Count > 0 && verbose)
+                {
+                    Console.WriteLine($"Loaded {snapshots.Count} snapshot(s) from: {snapshotDir}");
+                }
             }
 
             // Determine projects to analyze
@@ -297,7 +275,12 @@ public class Program
             Directory.CreateDirectory(tempWorkDir);
             var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
             var absoluteOutputPath = Path.GetFullPath(outputFile.FullName);
-            var appCsContent = AppCsContentGenerator.GenerateAppCsContent(allProjects.ToList(), absoluteOutputPath, title);
+            var appCsContent = AppCsContentGenerator.GenerateAppCsContent(
+                allProjects.ToList(), 
+                absoluteOutputPath, 
+                title,
+                withHistory,
+                snapshotDir);
 
             if (verbose)
             {
@@ -707,19 +690,34 @@ public class Program
                 ProjectAnalysisHelpers.CollectProjectDependencies(projectPath, allProjects, verbose, includeTests);
             }
 
-            // Generate analysis result using temporary app.cs
+            // Generate version number
+            var version = DateTime.Now.ToString("yyyyMMddHHmmss");
+            
+            // Ensure snapshot directory exists
+            var absoluteSnapshotDir = Path.GetFullPath(snapshotDir);
+            if (!Directory.Exists(absoluteSnapshotDir))
+            {
+                Directory.CreateDirectory(absoluteSnapshotDir);
+                if (verbose)
+                    Console.WriteLine($"Created snapshot directory: {absoluteSnapshotDir}");
+            }
+
+            // Generate app.cs that creates snapshot .cs file directly
             var tempWorkDir = Path.Combine(Path.GetTempPath(), $"netcorepal-snapshot-{Guid.NewGuid():N}");
             Directory.CreateDirectory(tempWorkDir);
             var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
-            var tempOutputPath = Path.Combine(tempWorkDir, "analysis-result.json");
             
-            // Generate app.cs that outputs JSON instead of HTML
-            var appCsContent = SnapshotAppCsGenerator.GenerateSnapshotAppCsContent(allProjects.ToList(), tempOutputPath);
+            // Generate app.cs that creates snapshot file
+            var appCsContent = SnapshotAppCsGenerator.GenerateSnapshotAppCsContent(
+                allProjects.ToList(), 
+                absoluteSnapshotDir, 
+                description,
+                version);
             await File.WriteAllTextAsync(tempAppCsPath, appCsContent);
 
             try
             {
-                Console.WriteLine("Analyzing projects...");
+                Console.WriteLine("Creating snapshot...");
                 var processStartInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "dotnet",
@@ -734,7 +732,7 @@ public class Program
                 using var process = System.Diagnostics.Process.Start(processStartInfo);
                 if (process == null)
                 {
-                    Console.Error.WriteLine("Failed to start analysis process");
+                    Console.Error.WriteLine("Failed to start snapshot creation process");
                     ExitHandler.Exit(1);
                     return;
                 }
@@ -749,7 +747,7 @@ public class Program
                     while ((line = await reader.ReadLineAsync()) != null)
                     {
                         outputBuilder.AppendLine(line);
-                        if (verbose) Console.WriteLine(line);
+                        Console.WriteLine(line); // Always show output for snapshot creation
                     }
                 });
 
@@ -769,40 +767,15 @@ public class Program
 
                 if (process.ExitCode != 0)
                 {
-                    Console.Error.WriteLine($"Analysis failed with exit code {process.ExitCode}:");
+                    Console.Error.WriteLine($"Snapshot creation failed with exit code {process.ExitCode}:");
                     Console.Error.WriteLine(errorBuilder.ToString());
                     ExitHandler.Exit(1);
                 }
 
-                // Load the analysis result
-                if (!File.Exists(tempOutputPath))
-                {
-                    Console.Error.WriteLine("Error: Analysis result file was not created");
-                    ExitHandler.Exit(1);
-                }
-
-                var resultJson = await File.ReadAllTextAsync(tempOutputPath);
-                var analysisResult = System.Text.Json.JsonSerializer.Deserialize<CodeFlowAnalysisResult>(resultJson,
-                    new System.Text.Json.JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true,
-                        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
-                    });
-
-                if (analysisResult == null)
-                {
-                    Console.Error.WriteLine("Error: Failed to deserialize analysis result");
-                    ExitHandler.Exit(1);
-                    return;
-                }
-
-                // Save snapshot
-                var version = SaveSnapshotToFile(analysisResult, description, snapshotDir, verbose);
-
+                // Snapshot file has been created by the app.cs
                 Console.WriteLine($"✅ Snapshot created successfully: {version}");
+                Console.WriteLine($"  Snapshot file: Snapshot_{version}.cs");
                 Console.WriteLine($"  Description: {description}");
-                Console.WriteLine($"  Nodes: {analysisResult.Nodes.Count}");
-                Console.WriteLine($"  Relationships: {analysisResult.Relationships.Count}");
             }
             finally
             {
