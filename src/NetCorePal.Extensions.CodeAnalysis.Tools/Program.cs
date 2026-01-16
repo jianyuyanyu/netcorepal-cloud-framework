@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Xml.Linq;
 using System.Text;
 using NetCorePal.Extensions.CodeAnalysis;
+using NetCorePal.Extensions.CodeAnalysis.Tools.Snapshots;
 
 namespace NetCorePal.Extensions.CodeAnalysis.Tools;
 
@@ -97,6 +98,10 @@ public class Program
             }, solutionOption, projectOption, outputOption, titleOption, verboseOption, includeTestsOption);
 
         rootCommand.AddCommand(generateCommand);
+        
+        // Add snapshot command
+        var snapshotCommand = CreateSnapshotCommand(solutionOption, projectOption, verboseOption, includeTestsOption);
+        rootCommand.AddCommand(snapshotCommand);
 
         return await rootCommand.InvokeAsync(args);
     }
@@ -514,4 +519,536 @@ public class Program
     // Helpers moved to ProjectAnalysisHelpers
 
     // Helpers moved to ProjectAnalysisHelpers
+
+    private static Command CreateSnapshotCommand(
+        Option<FileInfo> solutionOption,
+        Option<FileInfo[]> projectOption,
+        Option<bool> verboseOption,
+        Option<bool> includeTestsOption)
+    {
+        var snapshotCommand = new Command("snapshot", "Manage analysis snapshots (similar to EF Core migrations)");
+
+        // snapshot add command
+        var addCommand = new Command("add", "Create a new snapshot of current analysis");
+        var descriptionOption = new Option<string>(
+            name: "--description",
+            description: "Description for the snapshot")
+        {
+            IsRequired = false
+        };
+        descriptionOption.AddAlias("-d");
+        descriptionOption.SetDefaultValue("Snapshot created");
+
+        var snapshotDirOption = new Option<string>(
+            name: "--snapshot-dir",
+            description: "Directory to store snapshots (default: ./snapshots)")
+        {
+            IsRequired = false
+        };
+        snapshotDirOption.SetDefaultValue("snapshots");
+
+        addCommand.AddOption(solutionOption);
+        addCommand.AddOption(projectOption);
+        addCommand.AddOption(descriptionOption);
+        addCommand.AddOption(snapshotDirOption);
+        addCommand.AddOption(verboseOption);
+        addCommand.AddOption(includeTestsOption);
+
+        addCommand.SetHandler(
+            async (solution, projects, description, snapshotDir, verbose, includeTests) =>
+            {
+                await AddSnapshot(solution, projects, description, snapshotDir, verbose, includeTests);
+            }, solutionOption, projectOption, descriptionOption, snapshotDirOption, verboseOption, includeTestsOption);
+
+        // snapshot list command
+        var listCommand = new Command("list", "List all saved snapshots");
+        listCommand.AddOption(snapshotDirOption);
+        listCommand.AddOption(verboseOption);
+
+        listCommand.SetHandler((snapshotDir, verbose) =>
+        {
+            ListSnapshots(snapshotDir, verbose);
+        }, snapshotDirOption, verboseOption);
+
+        // snapshot show command
+        var showCommand = new Command("show", "Show details of a specific snapshot");
+        var versionArg = new Argument<string>("version", "Snapshot version to show");
+        showCommand.AddArgument(versionArg);
+        showCommand.AddOption(snapshotDirOption);
+        showCommand.AddOption(verboseOption);
+
+        showCommand.SetHandler((version, snapshotDir, verbose) =>
+        {
+            ShowSnapshot(version, snapshotDir, verbose);
+        }, versionArg, snapshotDirOption, verboseOption);
+
+        // snapshot diff command
+        var diffCommand = new Command("diff", "Show differences between two snapshots");
+        var fromVersionArg = new Argument<string>("from", "Source snapshot version");
+        var toVersionArg = new Argument<string>("to", "Target snapshot version (default: latest)") { Arity = ArgumentArity.ZeroOrOne };
+        diffCommand.AddArgument(fromVersionArg);
+        diffCommand.AddArgument(toVersionArg);
+        diffCommand.AddOption(snapshotDirOption);
+        diffCommand.AddOption(verboseOption);
+
+        diffCommand.SetHandler((fromVersion, toVersion, snapshotDir, verbose) =>
+        {
+            DiffSnapshots(fromVersion, toVersion, snapshotDir, verbose);
+        }, fromVersionArg, toVersionArg, snapshotDirOption, verboseOption);
+
+        snapshotCommand.AddCommand(addCommand);
+        snapshotCommand.AddCommand(listCommand);
+        snapshotCommand.AddCommand(showCommand);
+        snapshotCommand.AddCommand(diffCommand);
+
+        return snapshotCommand;
+    }
+
+    private static async Task AddSnapshot(FileInfo? solutionFile, FileInfo[]? projectFiles, string description,
+        string snapshotDir, bool verbose, bool includeTests)
+    {
+        try
+        {
+            if (verbose)
+            {
+                Console.WriteLine($"Creating snapshot with description: {description}");
+                Console.WriteLine($"Snapshot directory: {snapshotDir}");
+            }
+
+            // Collect projects to analyze (same logic as GenerateVisualization)
+            var projectsToAnalyze = new List<string>();
+
+            if (projectFiles?.Length > 0)
+            {
+                foreach (var projectFile in projectFiles)
+                {
+                    if (!projectFile.Exists)
+                    {
+                        Console.Error.WriteLine($"Error: Project file not found: {projectFile.FullName}");
+                        ExitHandler.Exit(1);
+                    }
+                    if (!includeTests && ProjectAnalysisHelpers.IsTestProject(projectFile.FullName, verbose))
+                    {
+                        if (verbose)
+                            Console.WriteLine($"  Skipping test project: {projectFile.FullName}");
+                        continue;
+                    }
+                    projectsToAnalyze.Add(projectFile.FullName);
+                }
+            }
+            else if (solutionFile != null)
+            {
+                if (!solutionFile.Exists)
+                {
+                    Console.Error.WriteLine($"Error: Solution file not found: {solutionFile.FullName}");
+                    ExitHandler.Exit(1);
+                }
+
+                var solutionDir = Path.GetDirectoryName(solutionFile.FullName)!;
+                var projectPaths = ProjectAnalysisHelpers.GetProjectPathsFromSolution(solutionFile.FullName, solutionDir);
+                var filtered = includeTests ? projectPaths : projectPaths.Where(p => !ProjectAnalysisHelpers.IsTestProject(p)).ToList();
+                projectsToAnalyze.AddRange(filtered);
+            }
+            else
+            {
+                await AutoDiscoverProjects(projectsToAnalyze, verbose, includeTests);
+            }
+
+            if (projectsToAnalyze.Count == 0)
+            {
+                Console.Error.WriteLine("Error: No projects found to analyze.");
+                ExitHandler.Exit(1);
+            }
+
+            // Collect all project dependencies
+            var allProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!verbose)
+            {
+                Console.WriteLine("Collecting project dependencies...");
+            }
+            foreach (var projectPath in projectsToAnalyze)
+            {
+                ProjectAnalysisHelpers.CollectProjectDependencies(projectPath, allProjects, verbose, includeTests);
+            }
+
+            // Generate analysis result using temporary app.cs
+            var tempWorkDir = Path.Combine(Path.GetTempPath(), $"netcorepal-snapshot-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(tempWorkDir);
+            var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
+            var tempOutputPath = Path.Combine(tempWorkDir, "analysis-result.json");
+            
+            // Generate app.cs that outputs JSON instead of HTML
+            var appCsContent = GenerateSnapshotAppCsContent(allProjects.ToList(), tempOutputPath);
+            await File.WriteAllTextAsync(tempAppCsPath, appCsContent);
+
+            try
+            {
+                Console.WriteLine("Analyzing projects...");
+                var processStartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    Arguments = $"run {tempAppCsPath} --no-launch-profile",
+                    WorkingDirectory = tempWorkDir,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = System.Diagnostics.Process.Start(processStartInfo);
+                if (process == null)
+                {
+                    Console.Error.WriteLine("Failed to start analysis process");
+                    ExitHandler.Exit(1);
+                    return;
+                }
+
+                var outputBuilder = new StringBuilder();
+                var errorBuilder = new StringBuilder();
+
+                var outputTask = Task.Run(async () =>
+                {
+                    using var reader = process.StandardOutput;
+                    string? line;
+                    while ((line = await reader.ReadLineAsync()) != null)
+                    {
+                        outputBuilder.AppendLine(line);
+                        if (verbose) Console.WriteLine(line);
+                    }
+                });
+
+                var errorTask = Task.Run(async () =>
+                {
+                    using var reader = process.StandardError;
+                    string? line;
+                    while ((line = await reader.ReadLineAsync()) != null)
+                    {
+                        errorBuilder.AppendLine(line);
+                        if (verbose) Console.Error.WriteLine(line);
+                    }
+                });
+
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(AnalysisTimeoutMinutes));
+                await Task.WhenAll(process.WaitForExitAsync(timeoutCts.Token), outputTask, errorTask);
+
+                if (process.ExitCode != 0)
+                {
+                    Console.Error.WriteLine($"Analysis failed with exit code {process.ExitCode}:");
+                    Console.Error.WriteLine(errorBuilder.ToString());
+                    ExitHandler.Exit(1);
+                }
+
+                // Load the analysis result
+                if (!File.Exists(tempOutputPath))
+                {
+                    Console.Error.WriteLine("Error: Analysis result file was not created");
+                    ExitHandler.Exit(1);
+                }
+
+                var resultJson = await File.ReadAllTextAsync(tempOutputPath);
+                var analysisResult = System.Text.Json.JsonSerializer.Deserialize<CodeFlowAnalysisResult>(resultJson,
+                    new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+                    });
+
+                if (analysisResult == null)
+                {
+                    Console.Error.WriteLine("Error: Failed to deserialize analysis result");
+                    ExitHandler.Exit(1);
+                    return;
+                }
+
+                // Save snapshot
+                var storage = new SnapshotStorage(snapshotDir);
+                var version = storage.SaveSnapshot(analysisResult, description, verbose);
+
+                Console.WriteLine($"✅ Snapshot created successfully: {version}");
+                Console.WriteLine($"  Description: {description}");
+                Console.WriteLine($"  Nodes: {analysisResult.Nodes.Count}");
+                Console.WriteLine($"  Relationships: {analysisResult.Relationships.Count}");
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(tempWorkDir))
+                    {
+                        Directory.Delete(tempWorkDir, recursive: true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (verbose)
+                        Console.WriteLine($"Warning: Failed to delete temporary folder: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            if (verbose)
+            {
+                Console.Error.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+            ExitHandler.Exit(1);
+        }
+    }
+
+    private static void ListSnapshots(string snapshotDir, bool verbose)
+    {
+        try
+        {
+            var storage = new SnapshotStorage(snapshotDir);
+            var snapshots = storage.ListSnapshots();
+
+            if (snapshots.Count == 0)
+            {
+                Console.WriteLine("No snapshots found.");
+                return;
+            }
+
+            Console.WriteLine($"Found {snapshots.Count} snapshot(s):\n");
+            Console.WriteLine($"{"Version",-20} {"Timestamp",-22} {"Nodes",-8} {"Relationships",-15} Description");
+            Console.WriteLine(new string('-', 100));
+
+            foreach (var snapshot in snapshots)
+            {
+                Console.WriteLine(
+                    $"{snapshot.Version,-20} {snapshot.Timestamp:yyyy-MM-dd HH:mm:ss,-22} {snapshot.NodeCount,-8} {snapshot.RelationshipCount,-15} {snapshot.Description}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            if (verbose)
+            {
+                Console.Error.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+            ExitHandler.Exit(1);
+        }
+    }
+
+    private static void ShowSnapshot(string version, string snapshotDir, bool verbose)
+    {
+        try
+        {
+            var storage = new SnapshotStorage(snapshotDir);
+            var snapshot = storage.LoadSnapshot(version);
+
+            if (snapshot == null)
+            {
+                Console.Error.WriteLine($"Error: Snapshot not found: {version}");
+                ExitHandler.Exit(1);
+                return;
+            }
+
+            Console.WriteLine($"Snapshot: {snapshot.Metadata.Version}");
+            Console.WriteLine($"Timestamp: {snapshot.Metadata.Timestamp:yyyy-MM-dd HH:mm:ss}");
+            Console.WriteLine($"Description: {snapshot.Metadata.Description}");
+            Console.WriteLine($"Hash: {snapshot.Metadata.Hash}");
+            Console.WriteLine($"\nStatistics:");
+            Console.WriteLine($"  Total Nodes: {snapshot.Metadata.NodeCount}");
+            Console.WriteLine($"  Total Relationships: {snapshot.Metadata.RelationshipCount}");
+
+            if (verbose)
+            {
+                var nodeStats = snapshot.AnalysisResult.Nodes
+                    .GroupBy(n => n.Type)
+                    .OrderBy(g => g.Key.ToString());
+
+                Console.WriteLine($"\nNode Types:");
+                foreach (var group in nodeStats)
+                {
+                    Console.WriteLine($"  {group.Key}: {group.Count()}");
+                }
+
+                var relStats = snapshot.AnalysisResult.Relationships
+                    .GroupBy(r => r.Type)
+                    .OrderBy(g => g.Key.ToString());
+
+                Console.WriteLine($"\nRelationship Types:");
+                foreach (var group in relStats)
+                {
+                    Console.WriteLine($"  {group.Key}: {group.Count()}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            if (verbose)
+            {
+                Console.Error.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+            ExitHandler.Exit(1);
+        }
+    }
+
+    private static void DiffSnapshots(string fromVersion, string? toVersion, string snapshotDir, bool verbose)
+    {
+        try
+        {
+            var storage = new SnapshotStorage(snapshotDir);
+            var fromSnapshot = storage.LoadSnapshot(fromVersion);
+
+            if (fromSnapshot == null)
+            {
+                Console.Error.WriteLine($"Error: Source snapshot not found: {fromVersion}");
+                ExitHandler.Exit(1);
+                return;
+            }
+
+            CodeFlowAnalysisSnapshot? toSnapshot;
+            if (string.IsNullOrEmpty(toVersion))
+            {
+                toSnapshot = storage.GetLatestSnapshot();
+                if (toSnapshot == null)
+                {
+                    Console.Error.WriteLine("Error: No snapshots found");
+                    ExitHandler.Exit(1);
+                    return;
+                }
+            }
+            else
+            {
+                toSnapshot = storage.LoadSnapshot(toVersion);
+                if (toSnapshot == null)
+                {
+                    Console.Error.WriteLine($"Error: Target snapshot not found: {toVersion}");
+                    ExitHandler.Exit(1);
+                    return;
+                }
+            }
+
+            var comparer = new SnapshotComparer();
+            var comparison = comparer.Compare(fromSnapshot, toSnapshot);
+
+            Console.WriteLine($"Comparing snapshots:");
+            Console.WriteLine($"  From: {comparison.FromSnapshot?.Version} ({comparison.FromSnapshot?.Timestamp:yyyy-MM-dd HH:mm:ss})");
+            Console.WriteLine($"  To:   {comparison.ToSnapshot?.Version} ({comparison.ToSnapshot?.Timestamp:yyyy-MM-dd HH:mm:ss})");
+            Console.WriteLine();
+
+            Console.WriteLine("Summary:");
+            Console.WriteLine($"  Nodes:         +{comparison.AddedNodes} -{comparison.RemovedNodes} ={comparison.UnchangedNodes}");
+            Console.WriteLine($"  Relationships: +{comparison.AddedRelationships} -{comparison.RemovedRelationships} ={comparison.UnchangedRelationships}");
+
+            if (verbose || comparison.AddedNodes > 0 || comparison.RemovedNodes > 0)
+            {
+                Console.WriteLine();
+                
+                if (comparison.AddedNodes > 0)
+                {
+                    Console.WriteLine($"Added Nodes ({comparison.AddedNodes}):");
+                    foreach (var nodeDiff in comparison.NodeDiffs.Where(d => d.DiffType == DiffType.Added))
+                    {
+                        Console.WriteLine($"  + [{nodeDiff.Node.Type}] {nodeDiff.Node.Name}");
+                    }
+                }
+
+                if (comparison.RemovedNodes > 0)
+                {
+                    Console.WriteLine($"\nRemoved Nodes ({comparison.RemovedNodes}):");
+                    foreach (var nodeDiff in comparison.NodeDiffs.Where(d => d.DiffType == DiffType.Removed))
+                    {
+                        Console.WriteLine($"  - [{nodeDiff.Node.Type}] {nodeDiff.Node.Name}");
+                    }
+                }
+
+                if (comparison.AddedRelationships > 0)
+                {
+                    Console.WriteLine($"\nAdded Relationships ({comparison.AddedRelationships}):");
+                    foreach (var relDiff in comparison.RelationshipDiffs.Where(d => d.DiffType == DiffType.Added).Take(20))
+                    {
+                        Console.WriteLine($"  + {relDiff.Relationship.FromNode.Name} --[{relDiff.Relationship.Type}]--> {relDiff.Relationship.ToNode.Name}");
+                    }
+                    if (comparison.AddedRelationships > 20)
+                    {
+                        Console.WriteLine($"  ... and {comparison.AddedRelationships - 20} more");
+                    }
+                }
+
+                if (comparison.RemovedRelationships > 0)
+                {
+                    Console.WriteLine($"\nRemoved Relationships ({comparison.RemovedRelationships}):");
+                    foreach (var relDiff in comparison.RelationshipDiffs.Where(d => d.DiffType == DiffType.Removed).Take(20))
+                    {
+                        Console.WriteLine($"  - {relDiff.Relationship.FromNode.Name} --[{relDiff.Relationship.Type}]--> {relDiff.Relationship.ToNode.Name}");
+                    }
+                    if (comparison.RemovedRelationships > 20)
+                    {
+                        Console.WriteLine($"  ... and {comparison.RemovedRelationships - 20} more");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            if (verbose)
+            {
+                Console.Error.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+            ExitHandler.Exit(1);
+        }
+    }
+
+    private static string GenerateSnapshotAppCsContent(List<string> projectPaths, string outputPath)
+    {
+        var sb = new StringBuilder();
+
+        // Add #:project directives
+        foreach (var projectPath in projectPaths)
+        {
+            sb.AppendLine($"#:project {projectPath}");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis;");
+        sb.AppendLine("using System.IO;");
+        sb.AppendLine("using System.Linq;");
+        sb.AppendLine("using System.Reflection;");
+        sb.AppendLine("using System.Text.Json;");
+        sb.AppendLine("using System.Text.Json.Serialization;");
+        sb.AppendLine();
+        sb.AppendLine("var baseDir = AppDomain.CurrentDomain.BaseDirectory;");
+
+        var assemblyNames = projectPaths
+            .Select(p => Path.GetFileNameWithoutExtension(p) + ".dll")
+            .Distinct()
+            .ToList();
+
+        sb.AppendLine("var assemblyNames = new[]");
+        sb.AppendLine("{");
+        foreach (var assemblyName in assemblyNames)
+        {
+            sb.AppendLine($"    \"{assemblyName}\",");
+        }
+        sb.AppendLine("};");
+        sb.AppendLine();
+
+        sb.AppendLine("var assemblies = assemblyNames");
+        sb.AppendLine("    .Select(name => Path.Combine(baseDir, name))");
+        sb.AppendLine("    .Where(File.Exists)");
+        sb.AppendLine("    .Select(Assembly.LoadFrom)");
+        sb.AppendLine("    .Distinct()");
+        sb.AppendLine("    .ToArray();");
+        sb.AppendLine();
+
+        sb.AppendLine("var result = CodeFlowAnalysisHelper.GetResultFromAssemblies(assemblies);");
+        sb.AppendLine();
+
+        var escapedOutputPath = outputPath.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        sb.AppendLine("var options = new JsonSerializerOptions");
+        sb.AppendLine("{");
+        sb.AppendLine("    WriteIndented = true,");
+        sb.AppendLine("    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,");
+        sb.AppendLine("    Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }");
+        sb.AppendLine("};");
+        sb.AppendLine($"var json = JsonSerializer.Serialize(result, options);");
+        sb.AppendLine($"File.WriteAllText(@\"{escapedOutputPath}\", json);");
+
+        return sb.ToString();
+    }
 }
