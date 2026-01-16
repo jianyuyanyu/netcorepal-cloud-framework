@@ -127,9 +127,13 @@ public class SnapshotStorage
                     snapshots.Add(snapshot.Metadata);
                 }
             }
-            catch
+            catch (System.Text.Json.JsonException)
             {
-                // 跳过无法解析的文件
+                // Skip files that cannot be parsed as valid snapshots
+            }
+            catch (IOException)
+            {
+                // Skip files that cannot be read
             }
         }
 
