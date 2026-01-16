@@ -783,6 +783,19 @@ public class Program
                 name);
             await File.WriteAllTextAsync(tempAppCsPath, appCsContent);
 
+            if (verbose)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"Generated app.cs file:");
+                Console.WriteLine($"  Directory: {tempWorkDir}");
+                Console.WriteLine($"  Path: {tempAppCsPath}");
+                Console.WriteLine();
+                Console.WriteLine("--- app.cs Content ---");
+                Console.WriteLine(appCsContent);
+                Console.WriteLine("--- End of app.cs ---");
+                Console.WriteLine();
+            }
+
             try
             {
                 Console.WriteLine("Creating snapshot...");
