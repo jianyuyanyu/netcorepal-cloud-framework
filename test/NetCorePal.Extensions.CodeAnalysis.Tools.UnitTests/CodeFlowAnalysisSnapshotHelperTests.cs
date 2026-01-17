@@ -262,6 +262,46 @@ public class CodeFlowAnalysisSnapshotHelperTests
         Assert.Contains("Test with \\\"quotes\\\" and \\\\backslashes\\\\", code); // Escaped in description
     }
 
+    [Fact]
+    public void GenerateSnapshotCode_WithDuplicateNodeIds_ShouldNotThrowException()
+    {
+        // Arrange - Create nodes with duplicate IDs (simulating the error scenario)
+        var node1 = new Node { Id = "duplicateId", Name = "Node1", FullName = "Test.Node1", Type = NodeType.Aggregate };
+        var node2 = new Node { Id = "duplicateId", Name = "Node2", FullName = "Test.Node2", Type = NodeType.EntityMethod };
+        var node3 = new Node { Id = "uniqueId", Name = "Node3", FullName = "Test.Node3", Type = NodeType.EntityMethod };
+        
+        var rel1 = new Relationship(node1, node3, RelationshipType.CommandToAggregate);
+        var rel2 = new Relationship(node2, node3, RelationshipType.CommandToAggregate);
+
+        var analysisResult = new CodeFlowAnalysisResult
+        {
+            Nodes = new List<Node> { node1, node2, node3 },
+            Relationships = new List<Relationship> { rel1, rel2 }
+        };
+
+        var metadata = new SnapshotMetadata
+        {
+            Version = "20260116120000",
+            Timestamp = DateTime.Now,
+            Description = "Test with duplicate node IDs",
+            Hash = "test123",
+            NodeCount = 3,
+            RelationshipCount = 2
+        };
+
+        // Act - Should not throw "An item with the same key has already been added" exception
+        var exception = Record.Exception(() =>
+        {
+            var code = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(analysisResult, metadata, "TestSnapshot");
+            Assert.NotNull(code);
+            Assert.Contains("public partial class", code);
+            Assert.Contains("TestSnapshot", code);
+        });
+
+        // Assert
+        Assert.Null(exception); // No exception should be thrown
+    }
+
     // Helper method to create test analysis result
     private static CodeFlowAnalysisResult CreateTestAnalysisResult()
     {
