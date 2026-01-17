@@ -69,8 +69,18 @@ public class CommandHandlerEntityMethodMetadataGenerator : IIncrementalGenerator
                             var typeInfo = semanticModel.GetTypeInfo(objCreation).Type as INamedTypeSymbol;
                             if (typeInfo != null && typeInfo.IsEntity())
                             {
-                                // 统一用 .ctor 作为构造方法名
-                                handlerMetas.Add((handlerType, commandType, typeInfo.ToDisplayString(), ".ctor"));
+                                // 获取构造函数符号以包含参数签名
+                                var ctorSymbol = semanticModel.GetSymbolInfo(objCreation).Symbol as IMethodSymbol;
+                                if (ctorSymbol != null)
+                                {
+                                    var ctorNameWithParams = GeneratorExtensions.GetMethodNameWithParameters(ctorSymbol);
+                                    handlerMetas.Add((handlerType, commandType, typeInfo.ToDisplayString(), ctorNameWithParams));
+                                }
+                                else
+                                {
+                                    // 回退：如果无法获取构造函数符号，使用默认名称
+                                    handlerMetas.Add((handlerType, commandType, typeInfo.ToDisplayString(), ".ctor()"));
+                                }
                             }
                         }
                     }

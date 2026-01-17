@@ -81,13 +81,16 @@ public class EntityMethodMetadataGenerator : IIncrementalGenerator
                     var targetType = invokedSymbol.ContainingType;
                     if (targetType != null && targetType.IsEntity())
                     {
-                        calledEntityMethods.Add($"{targetType.ToDisplayString()}.{invokedSymbol.Name}");
+                        var invokedMethodName = GetMethodNameWithParameters(invokedSymbol);
+                        calledEntityMethods.Add($"{targetType.ToDisplayString()}.{invokedMethodName}");
                     }
                 }
             }
             
             // 为所有实体方法生成元数据，即使没有发出事件或调用其他实体方法
-            metas.Add((containingType.ToDisplayString(), methodSymbol.Name, eventTypes.ToList(), calledEntityMethods.ToList()));
+            // 包含参数签名以支持方法重载
+            var methodNameWithParams = GetMethodNameWithParameters(methodSymbol);
+            metas.Add((containingType.ToDisplayString(), methodNameWithParams, eventTypes.ToList(), calledEntityMethods.ToList()));
         }
 
         GenerateMetadata(spc, metas, "EntityMethodMetadata.g.cs");
@@ -135,13 +138,15 @@ public class EntityMethodMetadataGenerator : IIncrementalGenerator
                     var targetType = invokedSymbol.ContainingType;
                     if (targetType != null && targetType.IsEntity())
                     {
-                        calledEntityMethods.Add($"{targetType.ToDisplayString()}.{invokedSymbol.Name}");
+                        var invokedMethodName = GetMethodNameWithParameters(invokedSymbol);
+                        calledEntityMethods.Add($"{targetType.ToDisplayString()}.{invokedMethodName}");
                     }
                 }
             }
             
-            // 为所有实体构造函数生成元数据
-            metas.Add((containingType.ToDisplayString(), ".ctor", eventTypes.ToList(), calledEntityMethods.ToList()));
+            // 为所有实体构造函数生成元数据，包含参数签名
+            var ctorNameWithParams = GetMethodNameWithParameters(methodSymbol);
+            metas.Add((containingType.ToDisplayString(), ctorNameWithParams, eventTypes.ToList(), calledEntityMethods.ToList()));
         }
 
         GenerateMetadata(spc, metas, "EntityConstructorMetadata.g.cs");
@@ -161,5 +166,25 @@ public class EntityMethodMetadataGenerator : IIncrementalGenerator
             }
             spc.AddSource(fileName, sb.ToString());
         }
+    }
+
+    /// <summary>
+    /// 获取方法名称及其参数签名，以支持方法重载
+    /// 格式: MethodName(ParamType1,ParamType2,...)
+    /// 例如: Create(string,int) 或 Update()
+    /// </summary>
+    private static string GetMethodNameWithParameters(IMethodSymbol methodSymbol)
+    {
+        var parameters = methodSymbol.Parameters;
+        if (parameters.Length == 0)
+        {
+            // 无参数方法或构造函数
+            return methodSymbol.MethodKind == MethodKind.Constructor ? ".ctor()" : $"{methodSymbol.Name}()";
+        }
+
+        var paramTypes = string.Join(",", parameters.Select(p => p.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+        return methodSymbol.MethodKind == MethodKind.Constructor 
+            ? $".ctor({paramTypes})" 
+            : $"{methodSymbol.Name}({paramTypes})";
     }
 }
