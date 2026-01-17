@@ -421,9 +421,29 @@ public class Program
             try
             {
                 Console.WriteLine("Starting analysis...");
+                
+                // Determine target framework from first project
+                string? targetFramework = null;
+                if (allProjects.Count > 0)
+                {
+                    var firstProject = allProjects.First();
+                    targetFramework = ProjectAnalysisHelpers.GetTargetFramework(firstProject, verbose);
+                }
+                
                 // Run dotnet run app.cs in an isolated temp directory to avoid project launchSettings/global.json in cwd
                 var workingDir = tempWorkDir;
                 var runArgs = $"run {tempAppCsPath} --no-launch-profile";
+                
+                // Add framework parameter if found
+                if (!string.IsNullOrEmpty(targetFramework))
+                {
+                    runArgs += $" -f {targetFramework}";
+                    if (verbose)
+                    {
+                        Console.WriteLine($"Using target framework: {targetFramework}");
+                    }
+                }
+                
                 if (verbose)
                 {
                     Console.WriteLine($"Executing: dotnet {runArgs}");
@@ -869,10 +889,37 @@ public class Program
             try
             {
                 Console.WriteLine("Creating snapshot...");
+                
+                // Determine target framework from first project
+                string? targetFramework = null;
+                if (allProjects.Count > 0)
+                {
+                    var firstProject = allProjects.First();
+                    targetFramework = ProjectAnalysisHelpers.GetTargetFramework(firstProject, verbose);
+                }
+                
+                var runArgs = $"run {tempAppCsPath} --no-launch-profile";
+                
+                // Add framework parameter if found
+                if (!string.IsNullOrEmpty(targetFramework))
+                {
+                    runArgs += $" -f {targetFramework}";
+                    if (verbose)
+                    {
+                        Console.WriteLine($"Using target framework: {targetFramework}");
+                    }
+                }
+                
+                if (verbose)
+                {
+                    Console.WriteLine($"Executing: dotnet {runArgs}");
+                    Console.WriteLine($"WorkingDirectory: {tempWorkDir}");
+                }
+                
                 var processStartInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "dotnet",
-                    Arguments = $"run {tempAppCsPath} --no-launch-profile",
+                    Arguments = runArgs,
                     WorkingDirectory = tempWorkDir,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,

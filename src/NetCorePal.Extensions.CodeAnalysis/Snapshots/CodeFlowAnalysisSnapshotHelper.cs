@@ -107,7 +107,11 @@ public static class CodeFlowAnalysisSnapshotHelper
         sb.AppendLine("            {");
         
         // Generate relationships (need to reference nodes from the list)
-        var nodeDict = analysisResult.Nodes.Select((n, i) => new { n.Id, Index = i }).ToDictionary(x => x.Id, x => x.Index);
+        // Handle potential duplicate node IDs by taking the first occurrence
+        var nodeDict = analysisResult.Nodes
+            .Select((n, i) => new { n.Id, Index = i })
+            .GroupBy(x => x.Id)
+            .ToDictionary(g => g.Key, g => g.First().Index);
         
         foreach (var rel in analysisResult.Relationships)
         {

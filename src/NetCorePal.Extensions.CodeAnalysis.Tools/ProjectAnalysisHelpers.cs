@@ -211,4 +211,74 @@ internal static class ProjectAnalysisHelpers
                       ?? "1.0.0";
         return version;
     }
+
+    /// <summary>
+    /// Gets the target framework from a project file. Returns the first TargetFramework or TargetFrameworks value found.
+    /// </summary>
+    /// <param name="projectFilePath">Path to the .csproj file</param>
+    /// <param name="verbose">Whether to print verbose output</param>
+    /// <returns>Target framework (e.g., "net8.0", "net9.0") or null if not found</returns>
+    internal static string? GetTargetFramework(string projectFilePath, bool verbose = false)
+    {
+        try
+        {
+            if (!File.Exists(projectFilePath))
+            {
+                return null;
+            }
+
+            var doc = XDocument.Load(projectFilePath);
+            
+            // Check for single TargetFramework
+            var targetFramework = doc.Descendants("PropertyGroup")
+                .SelectMany(pg => pg.Elements("TargetFramework"))
+                .Where(elem => !string.IsNullOrEmpty(elem.Value?.Trim()))
+                .Select(elem => elem.Value.Trim())
+                .FirstOrDefault();
+
+            if (!string.IsNullOrEmpty(targetFramework))
+            {
+                if (verbose)
+                {
+                    Console.WriteLine($"  Found TargetFramework: {targetFramework} in {Path.GetFileName(projectFilePath)}");
+                }
+                return targetFramework;
+            }
+
+            // Check for multiple TargetFrameworks (take the first one)
+            var targetFrameworks = doc.Descendants("PropertyGroup")
+                .SelectMany(pg => pg.Elements("TargetFrameworks"))
+                .Where(elem => !string.IsNullOrEmpty(elem.Value?.Trim()))
+                .Select(elem => elem.Value.Trim())
+                .FirstOrDefault();
+
+            if (!string.IsNullOrEmpty(targetFrameworks))
+            {
+                var frameworks = targetFrameworks.Split(';', StringSplitOptions.RemoveEmptyEntries);
+                if (frameworks.Length > 0)
+                {
+                    var firstFramework = frameworks[0].Trim();
+                    if (verbose)
+                    {
+                        Console.WriteLine($"  Found TargetFrameworks: {targetFrameworks} in {Path.GetFileName(projectFilePath)}, using first: {firstFramework}");
+                    }
+                    return firstFramework;
+                }
+            }
+
+            if (verbose)
+            {
+                Console.WriteLine($"  No TargetFramework found in {Path.GetFileName(projectFilePath)}");
+            }
+        }
+        catch (Exception ex)
+        {
+            if (verbose)
+            {
+                Console.WriteLine($"  Warning: Failed to get TargetFramework from {Path.GetFileName(projectFilePath)}: {ex.Message}");
+            }
+        }
+
+        return null;
+    }
 }
