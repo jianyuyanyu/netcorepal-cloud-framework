@@ -732,7 +732,8 @@ public class Program
         };
         snapshotDirOption.SetDefaultValue("Snapshots");
 
-        addCommand.AddOption(solutionOption);
+        // NOTE: snapshot add command does NOT support solution files
+        // Only support --project option and auto-discovery of single .csproj
         addCommand.AddOption(projectOption);
         addCommand.AddOption(descriptionOption);
         addCommand.AddOption(nameOption);
@@ -741,10 +742,10 @@ public class Program
         addCommand.AddOption(includeTestsOption);
 
         addCommand.SetHandler(
-            async (solution, projects, description, name, snapshotDir, verbose, includeTests) =>
+            async (projects, description, name, snapshotDir, verbose, includeTests) =>
             {
-                await AddSnapshot(solution, projects, description, name, snapshotDir, verbose, includeTests);
-            }, solutionOption, projectOption, descriptionOption, nameOption, snapshotDirOption, verboseOption, includeTestsOption);
+                await AddSnapshot(projects, description, name, snapshotDir, verbose, includeTests);
+            }, projectOption, descriptionOption, nameOption, snapshotDirOption, verboseOption, includeTestsOption);
 
         // snapshot list command
         var listCommand = new Command("list", "List all saved snapshots");
@@ -775,7 +776,7 @@ public class Program
         return snapshotCommand;
     }
 
-    private static async Task AddSnapshot(FileInfo? solutionFile, FileInfo[]? projectFiles, string description,
+    private static async Task AddSnapshot(FileInfo[]? projectFiles, string description,
         string? name, string snapshotDir, bool verbose, bool includeTests)
     {
         try
@@ -786,11 +787,13 @@ public class Program
                 Console.WriteLine($"Snapshot directory: {snapshotDir}");
             }
 
-            // Collect projects to analyze (same logic as GenerateVisualization)
+            // Collect projects to analyze
+            // NOTE: snapshot add command does NOT support solution files
             var projectsToAnalyze = new List<string>();
 
             if (projectFiles?.Length > 0)
             {
+                // Specific project files provided
                 foreach (var projectFile in projectFiles)
                 {
                     if (!projectFile.Exists)
@@ -807,27 +810,54 @@ public class Program
                     projectsToAnalyze.Add(projectFile.FullName);
                 }
             }
-            else if (solutionFile != null)
-            {
-                if (!solutionFile.Exists)
-                {
-                    Console.Error.WriteLine($"Error: Solution file not found: {solutionFile.FullName}");
-                    ExitHandler.Exit(1);
-                }
-
-                var solutionDir = Path.GetDirectoryName(solutionFile.FullName)!;
-                var projectPaths = ProjectAnalysisHelpers.GetProjectPathsFromSolution(solutionFile.FullName, solutionDir);
-                var filtered = includeTests ? projectPaths : projectPaths.Where(p => !ProjectAnalysisHelpers.IsTestProject(p)).ToList();
-                projectsToAnalyze.AddRange(filtered);
-            }
             else
             {
-                await AutoDiscoverProjects(projectsToAnalyze, verbose, includeTests);
+                // Auto-discover: only allow if current directory has exactly ONE .csproj
+                var currentDir = Directory.GetCurrentDirectory();
+                var projectFiles2 = Directory.GetFiles(currentDir, "*.csproj", SearchOption.TopDirectoryOnly);
+                
+                if (projectFiles2.Length == 0)
+                {
+                    Console.Error.WriteLine("Error: No .csproj file found in current directory.");
+                    Console.Error.WriteLine("Snapshot command requires either:");
+                    Console.Error.WriteLine("  1. Explicit --project option with specific .csproj file(s)");
+                    Console.Error.WriteLine("  2. Current directory containing exactly one .csproj file");
+                    ExitHandler.Exit(1);
+                }
+                else if (projectFiles2.Length > 1)
+                {
+                    Console.Error.WriteLine($"Error: Found {projectFiles2.Length} .csproj files in current directory.");
+                    Console.Error.WriteLine("Snapshot command requires exactly one .csproj file when auto-discovering.");
+                    Console.Error.WriteLine("Please use --project option to specify which project to analyze.");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("Found projects:");
+                    foreach (var proj in projectFiles2)
+                    {
+                        Console.Error.WriteLine($"  {Path.GetFileName(proj)}");
+                    }
+                    ExitHandler.Exit(1);
+                }
+                
+                // Exactly one project found
+                var singleProject = projectFiles2[0];
+                if (!includeTests && ProjectAnalysisHelpers.IsTestProject(singleProject, verbose))
+                {
+                    Console.Error.WriteLine($"Error: The single .csproj file found is a test project: {Path.GetFileName(singleProject)}");
+                    Console.Error.WriteLine("Snapshot command does not support test projects by default.");
+                    Console.Error.WriteLine("Use --include-tests flag if you want to create a snapshot from a test project.");
+                    ExitHandler.Exit(1);
+                }
+                
+                if (verbose)
+                {
+                    Console.WriteLine($"Auto-discovered project: {Path.GetFileName(singleProject)}");
+                }
+                projectsToAnalyze.Add(singleProject);
             }
 
             if (projectsToAnalyze.Count == 0)
             {
-                Console.Error.WriteLine("Error: No projects found to analyze.");
+                Console.Error.WriteLine("Error: No projects found to analyze after filtering.");
                 ExitHandler.Exit(1);
             }
 
