@@ -1,3 +1,5 @@
+using NetCorePal.Extensions.CodeAnalysis.Attributes;
+
 namespace NetCorePal.Extensions.CodeAnalysis.Snapshots;
 
 /// <summary>
@@ -9,16 +11,14 @@ public abstract class CodeFlowAnalysisSnapshot
     /// 快照元数据
     /// </summary>
     public SnapshotMetadata Metadata { get; protected set; } = new();
+
+    public MetadataAttribute[] MetadataAttributes { get; protected set; } = Array.Empty<MetadataAttribute>();
     
     /// <summary>
     /// 分析结果
     /// </summary>
-    public CodeFlowAnalysisResult AnalysisResult { get; protected set; } = new();
-    
-    /// <summary>
-    /// 构造函数，用于初始化快照的元数据和分析结果
-    /// </summary>
-    protected CodeFlowAnalysisSnapshot()
+    public CodeFlowAnalysisResult GetAnalysisResult()
     {
+        return CodeFlowAnalysisHelper.GetResultFromAttributes(MetadataAttributes);
     }
 }

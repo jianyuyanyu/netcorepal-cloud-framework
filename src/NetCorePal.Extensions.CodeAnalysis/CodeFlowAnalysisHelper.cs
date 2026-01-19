@@ -23,10 +23,18 @@ namespace NetCorePal.Extensions.CodeAnalysis
             return allAttributes;
         }
 
+
         public static CodeFlowAnalysisResult GetResultFromAssemblies(
             params Assembly[] assemblies)
         {
             var attributes = GetAllMetadataAttributes(assemblies);
+            return GetResultFromAttributes(attributes.ToArray());
+        }
+
+
+        public static CodeFlowAnalysisResult GetResultFromAttributes(
+            params MetadataAttribute[] attributes)
+        {
             var nodes = new List<Node>();
 
             var controllerNodes = GetControllerNodes(attributes);
