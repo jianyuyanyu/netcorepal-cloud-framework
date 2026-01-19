@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using NetCorePal.Extensions.CodeAnalysis.Attributes;
 
 namespace NetCorePal.Extensions.CodeAnalysis.Snapshots;
 
@@ -13,18 +14,21 @@ namespace NetCorePal.Extensions.CodeAnalysis.Snapshots;
 public static class CodeFlowAnalysisSnapshotHelper
 {
     /// <summary>
-    /// 基于CodeFlowAnalysisResult构造CodeFlowAnalysisSnapshot实例
+    /// 基于MetadataAttribute集合构造CodeFlowAnalysisSnapshot实例
     /// </summary>
-    /// <param name="analysisResult">分析结果</param>
+    /// <param name="metadataAttributes">元数据特性集合</param>
     /// <param name="description">快照描述</param>
     /// <param name="version">快照版本号（可选，默认使用时间戳）</param>
     /// <returns>快照实例</returns>
     public static CodeFlowAnalysisSnapshot CreateSnapshot(
-        CodeFlowAnalysisResult analysisResult, 
+        List<MetadataAttribute> metadataAttributes, 
         string description, 
         string? version = null)
     {
         version ??= DateTime.Now.ToString("yyyyMMddHHmmss");
+        
+        // 从MetadataAttributes生成CodeFlowAnalysisResult用于计算统计信息
+        var analysisResult = CodeFlowAnalysisHelper.GetResultFromMetadataAttributes(metadataAttributes);
         
         var metadata = new SnapshotMetadata
         {
@@ -36,7 +40,7 @@ public static class CodeFlowAnalysisSnapshotHelper
             RelationshipCount = analysisResult.Relationships.Count
         };
         
-        return new RuntimeSnapshot(metadata, analysisResult);
+        return new RuntimeSnapshot(metadata, metadataAttributes);
     }
     
     /// <summary>
@@ -47,17 +51,17 @@ public static class CodeFlowAnalysisSnapshotHelper
     /// <returns>C#代码字符串</returns>
     public static string GenerateSnapshotCode(CodeFlowAnalysisSnapshot snapshot, string? snapshotName = null)
     {
-        return GenerateSnapshotCode(snapshot.AnalysisResult, snapshot.Metadata, snapshotName);
+        return GenerateSnapshotCode(snapshot.MetadataAttributes, snapshot.Metadata, snapshotName);
     }
     
     /// <summary>
-    /// 基于分析结果和元数据，生成C#快照类代码（继承自CodeFlowAnalysisSnapshot抽象基类）
+    /// 基于MetadataAttribute集合和元数据，生成C#快照类代码（继承自CodeFlowAnalysisSnapshot抽象基类）
     /// </summary>
-    /// <param name="analysisResult">分析结果</param>
+    /// <param name="metadataAttributes">元数据特性集合</param>
     /// <param name="metadata">快照元数据</param>
     /// <param name="snapshotName">快照名称（可选，用于生成更具描述性的类名）</param>
     /// <returns>C#代码字符串</returns>
-    public static string GenerateSnapshotCode(CodeFlowAnalysisResult analysisResult, SnapshotMetadata metadata, string? snapshotName = null)
+    public static string GenerateSnapshotCode(List<MetadataAttribute> metadataAttributes, SnapshotMetadata metadata, string? snapshotName = null)
     {
         var sb = new StringBuilder();
         
@@ -69,6 +73,7 @@ public static class CodeFlowAnalysisSnapshotHelper
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis;");
+        sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis.Attributes;");
         sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis.Snapshots;");
         sb.AppendLine();
         sb.AppendLine("#nullable disable");
@@ -83,51 +88,23 @@ public static class CodeFlowAnalysisSnapshotHelper
         sb.AppendLine($"    public partial class {className} : CodeFlowAnalysisSnapshot");
         sb.AppendLine("    {");
         
-        // Constructor to initialize metadata
+        // Constructor to initialize metadata and attributes
         sb.AppendLine($"        public {className}()");
         sb.AppendLine("        {");
-        sb.AppendLine("            var nodes = new List<Node>");
+        
+        // Generate MetadataAttributes list
+        sb.AppendLine("            var attributes = new List<MetadataAttribute>");
         sb.AppendLine("            {");
         
-        // Generate nodes
-        foreach (var node in analysisResult.Nodes)
+        foreach (var attr in metadataAttributes)
         {
-            sb.AppendLine("                new Node");
-            sb.AppendLine("                {");
-            sb.AppendLine($"                    Id = \"{EscapeCSharpString(node.Id)}\",");
-            sb.AppendLine($"                    Name = \"{EscapeCSharpString(node.Name)}\",");
-            sb.AppendLine($"                    FullName = \"{EscapeCSharpString(node.FullName)}\",");
-            sb.AppendLine($"                    Type = NodeType.{node.Type}");
-            sb.AppendLine("                },");
-        }
-        
-        sb.AppendLine("            };");
-        sb.AppendLine();
-        sb.AppendLine("            var relationships = new List<Relationship>");
-        sb.AppendLine("            {");
-        
-        // Generate relationships (need to reference nodes from the list)
-        // Handle potential duplicate node IDs by taking the first occurrence
-        var nodeDict = analysisResult.Nodes
-            .Select((n, i) => new { n.Id, Index = i })
-            .GroupBy(x => x.Id)
-            .ToDictionary(g => g.Key, g => g.First().Index);
-        
-        foreach (var rel in analysisResult.Relationships)
-        {
-            var fromIndex = nodeDict.TryGetValue(rel.FromNode.Id, out var fi) ? fi : -1;
-            var toIndex = nodeDict.TryGetValue(rel.ToNode.Id, out var ti) ? ti : -1;
-            
-            if (fromIndex >= 0 && toIndex >= 0)
-            {
-                sb.AppendLine($"                new Relationship(nodes[{fromIndex}], nodes[{toIndex}], RelationshipType.{rel.Type}),");
-            }
+            sb.AppendLine($"                {GenerateMetadataAttributeCode(attr)},");
         }
         
         sb.AppendLine("            };");
         sb.AppendLine();
         
-        // Initialize metadata and analysis result in constructor
+        // Initialize metadata and MetadataAttributes in constructor
         sb.AppendLine("            Metadata = new SnapshotMetadata");
         sb.AppendLine("            {");
         sb.AppendLine($"                Version = \"{metadata.Version}\",");
@@ -138,17 +115,64 @@ public static class CodeFlowAnalysisSnapshotHelper
         sb.AppendLine($"                RelationshipCount = {metadata.RelationshipCount}");
         sb.AppendLine("            };");
         sb.AppendLine();
-        sb.AppendLine("            AnalysisResult = new CodeFlowAnalysisResult");
-        sb.AppendLine("            {");
-        sb.AppendLine("                Nodes = nodes,");
-        sb.AppendLine("                Relationships = relationships");
-        sb.AppendLine("            };");
+        sb.AppendLine("            MetadataAttributes = attributes;");
         sb.AppendLine("        }");
         
         sb.AppendLine("    }");
         sb.AppendLine("}");
         
         return sb.ToString();
+    }
+    
+    /// <summary>
+    /// 生成MetadataAttribute的C#代码
+    /// </summary>
+    private static string GenerateMetadataAttributeCode(MetadataAttribute attr)
+    {
+        // 根据不同的MetadataAttribute类型生成相应的代码
+        return attr switch
+        {
+            EntityMethodMetadataAttribute entityMethod => 
+                $"new EntityMethodMetadataAttribute(\"{EscapeCSharpString(entityMethod.EntityType)}\", \"{EscapeCSharpString(entityMethod.MethodName)}\") {{ EmittedEvents = new[] {{ {string.Join(", ", entityMethod.EmittedEvents?.Select(e => $"\"{EscapeCSharpString(e)}\"") ?? Array.Empty<string>())} }}, CalledEntityMethods = new[] {{ {string.Join(", ", entityMethod.CalledEntityMethods?.Select(m => $"\"{EscapeCSharpString(m)}\"") ?? Array.Empty<string>())} }} }}",
+            
+            CommandHandlerEntityMethodMetadataAttribute cmdHandlerMethod =>
+                $"new CommandHandlerEntityMethodMetadataAttribute(\"{EscapeCSharpString(cmdHandlerMethod.HandlerType)}\", \"{EscapeCSharpString(cmdHandlerMethod.EntityType)}\", \"{EscapeCSharpString(cmdHandlerMethod.EntityMethodName)}\")",
+            
+            EntityMetadataAttribute entity =>
+                $"new EntityMetadataAttribute(\"{EscapeCSharpString(entity.EntityType)}\")",
+            
+            CommandMetadataAttribute command =>
+                $"new CommandMetadataAttribute(\"{EscapeCSharpString(command.CommandType)}\")",
+            
+            CommandHandlerMetadataAttribute commandHandler =>
+                $"new CommandHandlerMetadataAttribute(\"{EscapeCSharpString(commandHandler.HandlerType)}\", \"{EscapeCSharpString(commandHandler.CommandType)}\")",
+            
+            DomainEventMetadataAttribute domainEvent =>
+                $"new DomainEventMetadataAttribute(\"{EscapeCSharpString(domainEvent.EventType)}\")",
+            
+            DomainEventHandlerMetadataAttribute domainEventHandler =>
+                $"new DomainEventHandlerMetadataAttribute(\"{EscapeCSharpString(domainEventHandler.HandlerType)}\", \"{EscapeCSharpString(domainEventHandler.EventType)}\") {{ SendCommands = new[] {{ {string.Join(", ", domainEventHandler.SendCommands?.Select(c => $"\"{EscapeCSharpString(c)}\"") ?? Array.Empty<string>())} }} }}",
+            
+            IntegrationEventMetadataAttribute integrationEvent =>
+                $"new IntegrationEventMetadataAttribute(\"{EscapeCSharpString(integrationEvent.EventType)}\")",
+            
+            IntegrationEventHandlerMetadataAttribute integrationEventHandler =>
+                $"new IntegrationEventHandlerMetadataAttribute(\"{EscapeCSharpString(integrationEventHandler.HandlerType)}\", \"{EscapeCSharpString(integrationEventHandler.EventType)}\") {{ SendCommands = new[] {{ {string.Join(", ", integrationEventHandler.SendCommands?.Select(c => $"\"{EscapeCSharpString(c)}\"") ?? Array.Empty<string>())} }} }}",
+            
+            IntegrationEventConverterMetadataAttribute converter =>
+                $"new IntegrationEventConverterMetadataAttribute(\"{EscapeCSharpString(converter.DomainEventType)}\", \"{EscapeCSharpString(converter.IntegrationEventType)}\")",
+            
+            ControllerMethodMetadataAttribute controllerMethod =>
+                $"new ControllerMethodMetadataAttribute(\"{EscapeCSharpString(controllerMethod.ControllerType)}\", \"{EscapeCSharpString(controllerMethod.MethodName)}\") {{ CommandTypes = new[] {{ {string.Join(", ", controllerMethod.CommandTypes?.Select(c => $"\"{EscapeCSharpString(c)}\"") ?? Array.Empty<string>())} }} }}",
+            
+            EndpointMetadataAttribute endpoint =>
+                $"new EndpointMetadataAttribute(\"{EscapeCSharpString(endpoint.EndpointType)}\") {{ CommandTypes = new[] {{ {string.Join(", ", endpoint.CommandTypes?.Select(c => $"\"{EscapeCSharpString(c)}\"") ?? Array.Empty<string>())} }} }}",
+            
+            CommandSenderMethodMetadataAttribute commandSenderMethod =>
+                $"new CommandSenderMethodMetadataAttribute(\"{EscapeCSharpString(commandSenderMethod.SenderType)}\", \"{EscapeCSharpString(commandSenderMethod.MethodName)}\") {{ CommandTypes = new[] {{ {string.Join(", ", commandSenderMethod.CommandTypes?.Select(c => $"\"{EscapeCSharpString(c)}\"") ?? Array.Empty<string>())} }} }}",
+            
+            _ => throw new NotSupportedException($"Unsupported MetadataAttribute type: {attr.GetType().Name}")
+        };
     }
     
     /// <summary>
@@ -299,10 +323,10 @@ public static class CodeFlowAnalysisSnapshotHelper
     /// </summary>
     private class RuntimeSnapshot : CodeFlowAnalysisSnapshot
     {
-        public RuntimeSnapshot(SnapshotMetadata metadata, CodeFlowAnalysisResult analysisResult)
+        public RuntimeSnapshot(SnapshotMetadata metadata, List<MetadataAttribute> metadataAttributes)
         {
             Metadata = metadata;
-            AnalysisResult = analysisResult;
+            MetadataAttributes = metadataAttributes;
         }
     }
 }
