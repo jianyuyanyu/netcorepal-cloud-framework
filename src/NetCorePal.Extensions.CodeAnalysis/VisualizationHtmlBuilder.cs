@@ -46,7 +46,7 @@ namespace NetCorePal.Extensions.CodeAnalysis
             }
 
             // 使用最新快照生成Mermaid图表
-            var latestResult = snapshotList[0].AnalysisResult;
+            var latestResult = snapshotList[0].GetAnalysisResult();
             var architectureOverviewMermaid =
                 MermaidVisualizers.ArchitectureOverviewMermaidVisualizer.GenerateMermaid(latestResult);
             var allProcessingFlowMermaid =
@@ -122,11 +122,11 @@ namespace NetCorePal.Extensions.CodeAnalysis
                 
                 // 分析结果
                 sb.Append("\"analysisResult\":");
-                sb.Append(BuildAnalysisResultJson(snapshot.AnalysisResult));
+                sb.Append(BuildAnalysisResultJson(snapshot.GetAnalysisResult()));
                 
                 // 统计信息
                 sb.Append(",\"statistics\":");
-                sb.Append(BuildStatisticsJson(snapshot.AnalysisResult));
+                sb.Append(BuildStatisticsJson(snapshot.GetAnalysisResult()));
                 
                 sb.Append("}");
                 

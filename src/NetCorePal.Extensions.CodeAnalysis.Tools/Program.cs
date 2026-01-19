@@ -1088,7 +1088,7 @@ public class Program
 
             if (verbose)
             {
-                var nodeStats = snapshot.AnalysisResult.Nodes
+                var nodeStats = snapshot.GetAnalysisResult().Nodes
                     .GroupBy(n => n.Type)
                     .OrderBy(g => g.Key.ToString());
 
@@ -1098,7 +1098,7 @@ public class Program
                     Console.WriteLine($"  {group.Key}: {group.Count()}");
                 }
 
-                var relStats = snapshot.AnalysisResult.Relationships
+                var relStats = snapshot.GetAnalysisResult().Relationships
                     .GroupBy(r => r.Type)
                     .OrderBy(g => g.Key.ToString());
 

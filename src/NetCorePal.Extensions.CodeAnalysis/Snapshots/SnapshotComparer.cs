@@ -68,10 +68,10 @@ public class SnapshotComparer
         };
 
         // 比较节点
-        CompareNodes(fromSnapshot.AnalysisResult, toSnapshot.AnalysisResult, comparison);
+        CompareNodes(fromSnapshot.GetAnalysisResult(), toSnapshot.GetAnalysisResult(), comparison);
         
         // 比较关系
-        CompareRelationships(fromSnapshot.AnalysisResult, toSnapshot.AnalysisResult, comparison);
+        CompareRelationships(fromSnapshot.GetAnalysisResult(), toSnapshot.GetAnalysisResult(), comparison);
 
         return comparison;
     }

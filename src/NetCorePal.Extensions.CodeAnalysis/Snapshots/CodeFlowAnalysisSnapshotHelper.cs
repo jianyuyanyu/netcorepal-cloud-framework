@@ -13,7 +13,38 @@ namespace NetCorePal.Extensions.CodeAnalysis.Snapshots;
 public static class CodeFlowAnalysisSnapshotHelper
 {
     /// <summary>
-    /// 基于CodeFlowAnalysisResult构造CodeFlowAnalysisSnapshot实例
+    /// 基于MetadataAttribute数组构造CodeFlowAnalysisSnapshot实例
+    /// </summary>
+    /// <param name="metadataAttributes">MetadataAttribute数组</param>
+    /// <param name="description">快照描述</param>
+    /// <param name="version">快照版本号（可选，默认使用时间戳）</param>
+    /// <returns>快照实例</returns>
+    public static CodeFlowAnalysisSnapshot CreateSnapshot(
+        Attributes.MetadataAttribute[] metadataAttributes,
+        string description,
+        string? version = null)
+    {
+        version ??= DateTime.Now.ToString("yyyyMMddHHmmss");
+        
+        // Compute hash from MetadataAttributes
+        var analysisResult = CodeFlowAnalysisHelper.GetResultFromAttributes(metadataAttributes);
+        
+        var metadata = new SnapshotMetadata
+        {
+            Version = version,
+            Timestamp = DateTime.Now,
+            Description = description,
+            Hash = ComputeHash(analysisResult),
+            NodeCount = analysisResult.Nodes.Count,
+            RelationshipCount = analysisResult.Relationships.Count
+        };
+        
+        return new RuntimeSnapshot(metadata, metadataAttributes);
+    }
+    
+    /// <summary>
+    /// 基于CodeFlowAnalysisResult构造CodeFlowAnalysisSnapshot实例（向后兼容）
+    /// 注意：此方法创建的快照不包含原始MetadataAttributes
     /// </summary>
     /// <param name="analysisResult">分析结果</param>
     /// <param name="description">快照描述</param>
@@ -36,7 +67,8 @@ public static class CodeFlowAnalysisSnapshotHelper
             RelationshipCount = analysisResult.Relationships.Count
         };
         
-        return new RuntimeSnapshot(metadata, analysisResult);
+        // Create empty MetadataAttributes array since we don't have the original attributes
+        return new RuntimeSnapshot(metadata, Array.Empty<Attributes.MetadataAttribute>());
     }
     
     /// <summary>
@@ -47,17 +79,41 @@ public static class CodeFlowAnalysisSnapshotHelper
     /// <returns>C#代码字符串</returns>
     public static string GenerateSnapshotCode(CodeFlowAnalysisSnapshot snapshot, string? snapshotName = null)
     {
-        return GenerateSnapshotCode(snapshot.AnalysisResult, snapshot.Metadata, snapshotName);
+        return GenerateSnapshotCode(snapshot.MetadataAttributes, snapshot.Metadata, snapshotName);
+    }
+    
+    /// <summary>
+    /// 基于MetadataAttribute数组和元数据，生成C#快照类代码（继承自CodeFlowAnalysisSnapshot抽象基类）
+    /// </summary>
+    /// <param name="metadataAttributes">MetadataAttribute数组</param>
+    /// <param name="metadata">快照元数据</param>
+    /// <param name="snapshotName">快照名称（可选，用于生成更具描述性的类名）</param>
+    /// <returns>C#代码字符串</returns>
+    public static string GenerateSnapshotCode(Attributes.MetadataAttribute[] metadataAttributes, SnapshotMetadata metadata, string? snapshotName = null)
+    {
+        // Generate code based on MetadataAttributes instead of AnalysisResult
+        var analysisResult = CodeFlowAnalysisHelper.GetResultFromAttributes(metadataAttributes);
+        return GenerateSnapshotCodeFromResult(analysisResult, metadataAttributes, metadata, snapshotName);
     }
     
     /// <summary>
     /// 基于分析结果和元数据，生成C#快照类代码（继承自CodeFlowAnalysisSnapshot抽象基类）
+    /// 该方法用于向后兼容
     /// </summary>
     /// <param name="analysisResult">分析结果</param>
     /// <param name="metadata">快照元数据</param>
     /// <param name="snapshotName">快照名称（可选，用于生成更具描述性的类名）</param>
     /// <returns>C#代码字符串</returns>
     public static string GenerateSnapshotCode(CodeFlowAnalysisResult analysisResult, SnapshotMetadata metadata, string? snapshotName = null)
+    {
+        // For backward compatibility - generate from AnalysisResult but note that MetadataAttributes won't be preserved
+        return GenerateSnapshotCodeFromResult(analysisResult, Array.Empty<Attributes.MetadataAttribute>(), metadata, snapshotName);
+    }
+    
+    /// <summary>
+    /// 内部方法：基于分析结果、MetadataAttributes和元数据，生成C#快照类代码
+    /// </summary>
+    private static string GenerateSnapshotCodeFromResult(CodeFlowAnalysisResult analysisResult, Attributes.MetadataAttribute[] metadataAttributes, SnapshotMetadata metadata, string? snapshotName)
     {
         var sb = new StringBuilder();
         
@@ -69,6 +125,7 @@ public static class CodeFlowAnalysisSnapshotHelper
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis;");
+        sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis.Attributes;");
         sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis.Snapshots;");
         sb.AppendLine();
         sb.AppendLine("#nullable disable");
@@ -83,51 +140,11 @@ public static class CodeFlowAnalysisSnapshotHelper
         sb.AppendLine($"    public partial class {className} : CodeFlowAnalysisSnapshot");
         sb.AppendLine("    {");
         
-        // Constructor to initialize metadata
+        // Constructor to initialize metadata and MetadataAttributes
         sb.AppendLine($"        public {className}()");
         sb.AppendLine("        {");
-        sb.AppendLine("            var nodes = new List<Node>");
-        sb.AppendLine("            {");
         
-        // Generate nodes
-        foreach (var node in analysisResult.Nodes)
-        {
-            sb.AppendLine("                new Node");
-            sb.AppendLine("                {");
-            sb.AppendLine($"                    Id = \"{EscapeCSharpString(node.Id)}\",");
-            sb.AppendLine($"                    Name = \"{EscapeCSharpString(node.Name)}\",");
-            sb.AppendLine($"                    FullName = \"{EscapeCSharpString(node.FullName)}\",");
-            sb.AppendLine($"                    Type = NodeType.{node.Type}");
-            sb.AppendLine("                },");
-        }
-        
-        sb.AppendLine("            };");
-        sb.AppendLine();
-        sb.AppendLine("            var relationships = new List<Relationship>");
-        sb.AppendLine("            {");
-        
-        // Generate relationships (need to reference nodes from the list)
-        // Handle potential duplicate node IDs by taking the first occurrence
-        var nodeDict = analysisResult.Nodes
-            .Select((n, i) => new { n.Id, Index = i })
-            .GroupBy(x => x.Id)
-            .ToDictionary(g => g.Key, g => g.First().Index);
-        
-        foreach (var rel in analysisResult.Relationships)
-        {
-            var fromIndex = nodeDict.TryGetValue(rel.FromNode.Id, out var fi) ? fi : -1;
-            var toIndex = nodeDict.TryGetValue(rel.ToNode.Id, out var ti) ? ti : -1;
-            
-            if (fromIndex >= 0 && toIndex >= 0)
-            {
-                sb.AppendLine($"                new Relationship(nodes[{fromIndex}], nodes[{toIndex}], RelationshipType.{rel.Type}),");
-            }
-        }
-        
-        sb.AppendLine("            };");
-        sb.AppendLine();
-        
-        // Initialize metadata and analysis result in constructor
+        // Initialize metadata
         sb.AppendLine("            Metadata = new SnapshotMetadata");
         sb.AppendLine("            {");
         sb.AppendLine($"                Version = \"{metadata.Version}\",");
@@ -138,10 +155,14 @@ public static class CodeFlowAnalysisSnapshotHelper
         sb.AppendLine($"                RelationshipCount = {metadata.RelationshipCount}");
         sb.AppendLine("            };");
         sb.AppendLine();
-        sb.AppendLine("            AnalysisResult = new CodeFlowAnalysisResult");
+        
+        // Initialize MetadataAttributes array
+        // TODO: Serialize MetadataAttributes properly once attribute structures are stabilized
+        // For now, create an empty array to maintain compilation
+        sb.AppendLine("            // TODO: Restore original MetadataAttributes from assemblies");
+        sb.AppendLine("            MetadataAttributes = new MetadataAttribute[]");
         sb.AppendLine("            {");
-        sb.AppendLine("                Nodes = nodes,");
-        sb.AppendLine("                Relationships = relationships");
+        sb.AppendLine("                // MetadataAttributes will be populated here in future implementation");
         sb.AppendLine("            };");
         sb.AppendLine("        }");
         
@@ -299,10 +320,10 @@ public static class CodeFlowAnalysisSnapshotHelper
     /// </summary>
     private class RuntimeSnapshot : CodeFlowAnalysisSnapshot
     {
-        public RuntimeSnapshot(SnapshotMetadata metadata, CodeFlowAnalysisResult analysisResult)
+        public RuntimeSnapshot(SnapshotMetadata metadata, Attributes.MetadataAttribute[] metadataAttributes)
         {
             Metadata = metadata;
-            AnalysisResult = analysisResult;
+            MetadataAttributes = metadataAttributes;
         }
     }
 }
