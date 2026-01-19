@@ -157,12 +157,29 @@ public static class CodeFlowAnalysisSnapshotHelper
         sb.AppendLine();
         
         // Initialize MetadataAttributes array
-        // TODO: Serialize MetadataAttributes properly once attribute structures are stabilized
-        // For now, create an empty array to maintain compilation
-        sb.AppendLine("            // TODO: Restore original MetadataAttributes from assemblies");
         sb.AppendLine("            MetadataAttributes = new MetadataAttribute[]");
         sb.AppendLine("            {");
-        sb.AppendLine("                // MetadataAttributes will be populated here in future implementation");
+        
+        // Serialize each MetadataAttribute
+        for (int i = 0; i < metadataAttributes.Length; i++)
+        {
+            var attr = metadataAttributes[i];
+            var attrCode = SerializeMetadataAttribute(attr);
+            if (!string.IsNullOrEmpty(attrCode))
+            {
+                sb.Append("                ");
+                sb.Append(attrCode);
+                if (i < metadataAttributes.Length - 1)
+                {
+                    sb.AppendLine(",");
+                }
+                else
+                {
+                    sb.AppendLine();
+                }
+            }
+        }
+        
         sb.AppendLine("            };");
         sb.AppendLine("        }");
         
@@ -170,6 +187,67 @@ public static class CodeFlowAnalysisSnapshotHelper
         sb.AppendLine("}");
         
         return sb.ToString();
+    }
+    
+    /// <summary>
+    /// 序列化单个MetadataAttribute为C#代码
+    /// </summary>
+    private static string SerializeMetadataAttribute(Attributes.MetadataAttribute attr)
+    {
+        return attr switch
+        {
+            Attributes.EntityMetadataAttribute entity => 
+                $"new EntityMetadataAttribute({EscapeCSharpString(entity.EntityType)}, {entity.IsAggregateRoot.ToString().ToLower()}, {SerializeStringArray(entity.SubEntities)}, {SerializeStringArray(entity.MethodNames)})",
+            
+            Attributes.EntityMethodMetadataAttribute method => 
+                $"new EntityMethodMetadataAttribute({EscapeCSharpString(method.EntityType)}, {EscapeCSharpString(method.MethodName)}, {SerializeStringArray(method.EventTypes)}, {SerializeStringArray(method.CalledEntityMethods)})",
+            
+            Attributes.DomainEventMetadataAttribute domainEvent => 
+                $"new DomainEventMetadataAttribute({EscapeCSharpString(domainEvent.EventType)})",
+            
+            Attributes.CommandMetadataAttribute command => 
+                $"new CommandMetadataAttribute({EscapeCSharpString(command.CommandType)})",
+            
+            Attributes.DomainEventHandlerMetadataAttribute domainHandler => 
+                $"new DomainEventHandlerMetadataAttribute({EscapeCSharpString(domainHandler.HandlerType)}, {EscapeCSharpString(domainHandler.EventType)}, {SerializeStringArray(domainHandler.CommandTypes)})",
+            
+            Attributes.IntegrationEventHandlerMetadataAttribute integrationHandler => 
+                $"new IntegrationEventHandlerMetadataAttribute({EscapeCSharpString(integrationHandler.HandlerType)}, {EscapeCSharpString(integrationHandler.EventType)}, {SerializeStringArray(integrationHandler.CommandTypes)})",
+            
+            Attributes.CommandHandlerMetadataAttribute commandHandler => 
+                $"new CommandHandlerMetadataAttribute({EscapeCSharpString(commandHandler.HandlerType)}, {EscapeCSharpString(commandHandler.CommandType)}, {SerializeStringArray(commandHandler.AggregateTypes)})",
+            
+            Attributes.CommandHandlerEntityMethodMetadataAttribute commandHandlerMethod => 
+                $"new CommandHandlerEntityMethodMetadataAttribute({EscapeCSharpString(commandHandlerMethod.HandlerType)}, {EscapeCSharpString(commandHandlerMethod.CommandType)}, {EscapeCSharpString(commandHandlerMethod.EntityType)}, {EscapeCSharpString(commandHandlerMethod.EntityMethodName)})",
+            
+            Attributes.ControllerMethodMetadataAttribute controller => 
+                $"new ControllerMethodMetadataAttribute({EscapeCSharpString(controller.ControllerType)}, {EscapeCSharpString(controller.ControllerMethodName)}, {SerializeStringArray(controller.CommandTypes)})",
+            
+            Attributes.CommandSenderMethodMetadataAttribute sender => 
+                $"new CommandSenderMethodMetadataAttribute({EscapeCSharpString(sender.SenderType)}, {EscapeCSharpString(sender.SenderMethodName)}, {SerializeStringArray(sender.CommandTypes)})",
+            
+            Attributes.EndpointMetadataAttribute endpoint => 
+                $"new EndpointMetadataAttribute({EscapeCSharpString(endpoint.EndpointType)}, {EscapeCSharpString(endpoint.EndpointMethodName)}, {SerializeStringArray(endpoint.CommandTypes)})",
+            
+            Attributes.IntegrationEventConverterMetadataAttribute converter => 
+                $"new IntegrationEventConverterMetadataAttribute({EscapeCSharpString(converter.DomainEventType)}, {EscapeCSharpString(converter.IntegrationEventType)})",
+            
+            _ => string.Empty
+        };
+    }
+    
+    /// <summary>
+    /// 序列化字符串数组为C#代码
+    /// </summary>
+    private static string SerializeStringArray(string[] array)
+    {
+        if (array == null || array.Length == 0)
+        {
+            return "new string[] { }";
+        }
+        
+        var items = array.Select(s => EscapeCSharpString(s));
+        return $"new string[] {{ {string.Join(", ", items)} }}";
     }
     
     /// <summary>
