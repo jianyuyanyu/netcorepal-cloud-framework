@@ -13,7 +13,6 @@ namespace NetCorePal.Extensions.CodeAnalysis
         /// 生成架构可视化HTML页面
         /// </summary>
         /// <param name="analysisResult">分析结果（当withHistory=false或无快照时使用）</param>
-        /// <param name="assemblies">程序集数组（用于获取MetadataAttributes）</param>
         /// <param name="title">页面标题</param>
         /// <param name="maxEdges">最大边数</param>
         /// <param name="maxTextSize">最大文本大小</param>
@@ -22,7 +21,6 @@ namespace NetCorePal.Extensions.CodeAnalysis
         /// <returns>HTML内容</returns>
         public static string GenerateVisualizationHtml(
             CodeFlowAnalysisResult analysisResult,
-            System.Reflection.Assembly[] assemblies,
             string title = "系统模型架构图",
             int maxEdges = 5000,
             int maxTextSize = 1000000,
@@ -39,17 +37,16 @@ namespace NetCorePal.Extensions.CodeAnalysis
             }
             else
             {
-                // 没有快照时，使用当前的MetadataAttributes构造一个快照
-                var attributes = CodeFlowAnalysisHelper.GetAllMetadataAttributes(assemblies);
+                // 没有快照时，使用当前分析结果构造一个快照
                 var currentSnapshot = Snapshots.CodeFlowAnalysisSnapshotHelper.CreateSnapshot(
-                    attributes, 
+                    analysisResult, 
                     "当前版本");
                 
                 snapshotList.Add(currentSnapshot);
             }
 
             // 使用最新快照生成Mermaid图表
-            var latestResult = snapshotList[0].GetCodeFlowAnalysisResult();
+            var latestResult = snapshotList[0].AnalysisResult;
             var architectureOverviewMermaid =
                 MermaidVisualizers.ArchitectureOverviewMermaidVisualizer.GenerateMermaid(latestResult);
             var allProcessingFlowMermaid =
@@ -123,14 +120,13 @@ namespace NetCorePal.Extensions.CodeAnalysis
                 sb.Append($"\"relationshipCount\":{snapshot.Metadata.RelationshipCount}");
                 sb.Append("},");
                 
-                // 分析结果（从MetadataAttributes生成）
-                var analysisResult = snapshot.GetCodeFlowAnalysisResult();
+                // 分析结果
                 sb.Append("\"analysisResult\":");
-                sb.Append(BuildAnalysisResultJson(analysisResult));
+                sb.Append(BuildAnalysisResultJson(snapshot.AnalysisResult));
                 
                 // 统计信息
                 sb.Append(",\"statistics\":");
-                sb.Append(BuildStatisticsJson(analysisResult));
+                sb.Append(BuildStatisticsJson(snapshot.AnalysisResult));
                 
                 sb.Append("}");
                 

@@ -25,9 +25,9 @@ public class CodeFlowAnalysisHelperTests
         Assert.Equal(18, result.Nodes.Count(n => n.Type == NodeType.Command));
         
         Assert.Equal(2, result.Nodes.Count(n => n.Type == NodeType.CommandHandler));
-        Assert.Equal(5, result.Nodes.Count(n => n.Type == NodeType.Aggregate));
-        Assert.Equal(15, result.Nodes.Count(n => n.Type == NodeType.EntityMethod));
-        Assert.Equal(7, result.Nodes.Count(n => n.Type == NodeType.DomainEvent));
+        Assert.Equal(6, result.Nodes.Count(n => n.Type == NodeType.Aggregate)); // +1 for OverloadedEntity
+        Assert.Equal(18, result.Nodes.Count(n => n.Type == NodeType.EntityMethod)); // +3 for OverloadedEntity (Create, Update, .ctor - merged overloads)
+        Assert.Equal(8, result.Nodes.Count(n => n.Type == NodeType.DomainEvent)); // +1 for OverloadedEntityUpdatedEvent
         Assert.Equal(3, result.Nodes.Count(n => n.Type == NodeType.IntegrationEvent));
         Assert.Equal(2, result.Nodes.Count(n => n.Type == NodeType.DomainEventHandler));
         Assert.Equal(4, result.Nodes.Count(n => n.Type == NodeType.IntegrationEventHandler));
@@ -41,19 +41,19 @@ public class CodeFlowAnalysisHelperTests
         Assert.Equal(16, result.Relationships.Count(r => r.Type == RelationshipType.CommandSenderMethodToCommand));
         Assert.Equal(1, result.Relationships.Count(r => r.Type == RelationshipType.CommandToAggregate));
         Assert.Equal(5, result.Relationships.Count(r => r.Type == RelationshipType.CommandToEntityMethod));
-        Assert.Equal(13, result.Relationships.Count(r => r.Type == RelationshipType.AggregateToDomainEvent));
+        Assert.Equal(14, result.Relationships.Count(r => r.Type == RelationshipType.AggregateToDomainEvent)); // +1 for OverloadedEntity -> OverloadedEntityUpdatedEvent
         Assert.Equal(2, result.Relationships.Count(r => r.Type == RelationshipType.EntityMethodToEntityMethod));
-        Assert.Equal(7, result.Relationships.Count(r => r.Type == RelationshipType.EntityMethodToDomainEvent));
+        Assert.Equal(8, result.Relationships.Count(r => r.Type == RelationshipType.EntityMethodToDomainEvent)); // +1 for Update -> OverloadedEntityUpdatedEvent
         Assert.Equal(2, result.Relationships.Count(r => r.Type == RelationshipType.DomainEventToHandler));
         Assert.Equal(2, result.Relationships.Count(r => r.Type == RelationshipType.DomainEventHandlerToCommand));
         Assert.Equal(4, result.Relationships.Count(r => r.Type == RelationshipType.IntegrationEventToHandler));
         Assert.Equal(3, result.Relationships.Count(r => r.Type == RelationshipType.DomainEventToIntegrationEvent));
 
         // 验证总节点数量
-        Assert.Equal(105, result.Nodes.Count);
+        Assert.Equal(110, result.Nodes.Count); // +5 for OverloadedEntity additions (1 aggregate + 3 methods + 1 event)
         
         // 验证总关系数量
-        Assert.Equal(107, result.Relationships.Count);
+        Assert.Equal(109, result.Relationships.Count); // +2 for OverloadedEntity relationships
     }
 
     [Fact]

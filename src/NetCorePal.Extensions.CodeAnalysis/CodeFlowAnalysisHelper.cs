@@ -27,31 +27,22 @@ namespace NetCorePal.Extensions.CodeAnalysis
             params Assembly[] assemblies)
         {
             var attributes = GetAllMetadataAttributes(assemblies);
-            return GetResultFromMetadataAttributes(attributes);
-        }
-
-        /// <summary>
-        /// 从MetadataAttribute集合生成CodeFlowAnalysisResult
-        /// </summary>
-        public static CodeFlowAnalysisResult GetResultFromMetadataAttributes(IEnumerable<MetadataAttribute> attributes)
-        {
-            var attributeList = attributes.ToList();
             var nodes = new List<Node>();
 
-            var controllerNodes = GetControllerNodes(attributeList);
-            var controllerMethodNodes = GetControllerMethodNodes(attributeList);
-            var endpointNodes = GetEndpointNodes(attributeList);
-            var commandSenderNodes = GetCommandSenderNodes(attributeList);
-            var commandSenderMethodNodes = GetCommandSenderMethodNodes(attributeList);
-            var commandNodes = GetCommandNodes(attributeList);
-            var commandHandlerNodes = GetCommandHandlerNodes(attributeList);
-            var aggregateNodes = GetAggregateNodes(attributeList);
-            var aggregateMethodNodes = GetEntityMethodNodes(attributeList);
-            var domainEventNodes = GetDomainEventNodes(attributeList);
-            var integrationEventNodes = GetIntegrationEventNodes(attributeList);
-            var domainEventHandlerNodes = GetDomainEventHandlerNodes(attributeList);
-            var integrationEventHandlerNodes = GetIntegrationEventHandlerNodes(attributeList);
-            var integrationEventConverterNodes = GetIntegrationEventConverterNodes(attributeList);
+            var controllerNodes = GetControllerNodes(attributes);
+            var controllerMethodNodes = GetControllerMethodNodes(attributes);
+            var endpointNodes = GetEndpointNodes(attributes);
+            var commandSenderNodes = GetCommandSenderNodes(attributes);
+            var commandSenderMethodNodes = GetCommandSenderMethodNodes(attributes);
+            var commandNodes = GetCommandNodes(attributes);
+            var commandHandlerNodes = GetCommandHandlerNodes(attributes);
+            var aggregateNodes = GetAggregateNodes(attributes);
+            var aggregateMethodNodes = GetEntityMethodNodes(attributes);
+            var domainEventNodes = GetDomainEventNodes(attributes);
+            var integrationEventNodes = GetIntegrationEventNodes(attributes);
+            var domainEventHandlerNodes = GetDomainEventHandlerNodes(attributes);
+            var integrationEventHandlerNodes = GetIntegrationEventHandlerNodes(attributes);
+            var integrationEventConverterNodes = GetIntegrationEventConverterNodes(attributes);
 
             nodes.AddRange(controllerNodes);
             nodes.AddRange(controllerMethodNodes);
@@ -69,34 +60,34 @@ namespace NetCorePal.Extensions.CodeAnalysis
             nodes.AddRange(integrationEventConverterNodes);
 
             var relationships = new List<Relationship>();
-            relationships.AddRange(GetControllerToCommandRelationships(controllerNodes, commandNodes, attributeList));
+            relationships.AddRange(GetControllerToCommandRelationships(controllerNodes, commandNodes, attributes));
             relationships.AddRange(
-                GetControllerMethodToCommandRelationships(controllerMethodNodes, commandNodes, attributeList));
-            relationships.AddRange(GetEndpointToCommandRelationships(endpointNodes, commandNodes, attributeList));
+                GetControllerMethodToCommandRelationships(controllerMethodNodes, commandNodes, attributes));
+            relationships.AddRange(GetEndpointToCommandRelationships(endpointNodes, commandNodes, attributes));
             relationships.AddRange(
-                GetCommandSenderToCommandRelationships(commandSenderNodes, commandNodes, attributeList));
+                GetCommandSenderToCommandRelationships(commandSenderNodes, commandNodes, attributes));
             relationships.AddRange(
-                GetCommandSenderMethodToCommandRelationships(commandSenderMethodNodes, commandNodes, attributeList));
-            relationships.AddRange(GetCommandToAggregateRelationships(commandNodes, aggregateNodes, attributeList));
+                GetCommandSenderMethodToCommandRelationships(commandSenderMethodNodes, commandNodes, attributes));
+            relationships.AddRange(GetCommandToAggregateRelationships(commandNodes, aggregateNodes, attributes));
             relationships.AddRange(
-                GetCommandToEntityMethodRelationships(commandNodes, aggregateMethodNodes, attributeList));
+                GetCommandToEntityMethodRelationships(commandNodes, aggregateMethodNodes, attributes));
             relationships.AddRange(
-                GetAggregateToDomainEventRelationships(aggregateNodes, domainEventNodes, attributeList));
+                GetAggregateToDomainEventRelationships(aggregateNodes, domainEventNodes, attributes));
             relationships.AddRange(GetEntityMethodToEntityMethodRelationships(aggregateMethodNodes,
-                aggregateMethodNodes, attributeList));
+                aggregateMethodNodes, attributes));
             relationships.AddRange(
-                GetEntityMethodToDomainEventRelationships(aggregateMethodNodes, domainEventNodes, attributeList));
+                GetEntityMethodToDomainEventRelationships(aggregateMethodNodes, domainEventNodes, attributes));
             relationships.AddRange(
-                GetDomainEventToHandlerRelationships(domainEventNodes, domainEventHandlerNodes, attributeList));
+                GetDomainEventToHandlerRelationships(domainEventNodes, domainEventHandlerNodes, attributes));
             relationships.AddRange(
-                GetDomainEventHandlerToCommandRelationships(domainEventHandlerNodes, commandNodes, attributeList));
+                GetDomainEventHandlerToCommandRelationships(domainEventHandlerNodes, commandNodes, attributes));
             relationships.AddRange(
                 GetIntegrationEventToHandlerRelationships(integrationEventNodes, integrationEventHandlerNodes,
-                    attributeList));
+                    attributes));
             relationships.AddRange(GetIntegrationEventHandlerToCommandRelationships(integrationEventHandlerNodes,
-                commandNodes, attributeList));
+                commandNodes, attributes));
             relationships.AddRange(
-                GetDomainEventToIntegrationEventRelationships(domainEventNodes, integrationEventNodes, attributeList));
+                GetDomainEventToIntegrationEventRelationships(domainEventNodes, integrationEventNodes, attributes));
 
             // 去重：每对 fromNode.Id, toNode.Id, type 只出现一次
             var uniqueRelationships = relationships

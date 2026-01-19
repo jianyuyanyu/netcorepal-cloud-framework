@@ -67,15 +67,11 @@ public class SnapshotComparer
             ToSnapshot = toSnapshot.Metadata
         };
 
-        // 获取分析结果
-        var fromResult = fromSnapshot.GetCodeFlowAnalysisResult();
-        var toResult = toSnapshot.GetCodeFlowAnalysisResult();
-
         // 比较节点
-        CompareNodes(fromResult, toResult, comparison);
+        CompareNodes(fromSnapshot.AnalysisResult, toSnapshot.AnalysisResult, comparison);
         
         // 比较关系
-        CompareRelationships(fromResult, toResult, comparison);
+        CompareRelationships(fromSnapshot.AnalysisResult, toSnapshot.AnalysisResult, comparison);
 
         return comparison;
     }

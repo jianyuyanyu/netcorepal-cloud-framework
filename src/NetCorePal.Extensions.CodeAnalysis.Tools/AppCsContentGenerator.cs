@@ -70,11 +70,11 @@ internal static class AppCsContentGenerator
             sb.AppendLine("List<CodeFlowAnalysisSnapshot> snapshots = null;");
             sb.AppendLine("// Note: Snapshot loading would require additional logic here");
             sb.AppendLine("// For now, pass null and let GenerateVisualizationHtml create a current snapshot");
-            sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, assemblies, @\"{escapedTitle}\", withHistory: true, snapshots: null);");
+            sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\", withHistory: true, snapshots: null);");
         }
         else
         {
-            sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, assemblies, @\"{escapedTitle}\", withHistory: false);");
+            sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\", withHistory: false);");
         }
         
         sb.AppendLine($"File.WriteAllText(@\"{escapedOutputPath}\", html);");
