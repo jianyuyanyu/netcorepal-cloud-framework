@@ -174,7 +174,6 @@ namespace NetCorePal.Extensions.CodeAnalysis.SourceGenerators
 
         /// <summary>
         /// 判断调用是否为实体方法调用，如果是，out 返回 (实体类型名, 方法名)，否则 out (null, null) 并返回 false。
-        /// 方法名包含参数签名以支持重载，格式: MethodName(ParamType1,ParamType2,...)
         /// </summary>
         public static bool IsEntityMethodInvocation(this InvocationExpressionSyntax invocation, SemanticModel semanticModel, out (string? entityType, string? methodName) result)
         {
@@ -185,32 +184,13 @@ namespace NetCorePal.Extensions.CodeAnalysis.SourceGenerators
                 var containingType = invokedSymbol.ContainingType;
                 if (containingType != null && containingType.IsEntity())
                 {
-                    var methodNameWithParams = GetMethodNameWithParameters(invokedSymbol);
-                    result = (containingType.ToDisplayString(), methodNameWithParams);
+                    // 只使用方法名，不包含参数签名
+                    var methodName = invokedSymbol.Name;
+                    result = (containingType.ToDisplayString(), methodName);
                     return true;
                 }
             }
             return false;
-        }
-
-        /// <summary>
-        /// 获取方法名称及其参数签名，以支持方法重载
-        /// 格式: MethodName(ParamType1,ParamType2,...)
-        /// 例如: Create(string,int) 或 Update()
-        /// </summary>
-        public static string GetMethodNameWithParameters(IMethodSymbol methodSymbol)
-        {
-            var parameters = methodSymbol.Parameters;
-            if (parameters.Length == 0)
-            {
-                // 无参数方法或构造函数
-                return methodSymbol.MethodKind == MethodKind.Constructor ? ".ctor()" : $"{methodSymbol.Name}()";
-            }
-
-            var paramTypes = string.Join(",", parameters.Select(p => p.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
-            return methodSymbol.MethodKind == MethodKind.Constructor 
-                ? $".ctor({paramTypes})" 
-                : $"{methodSymbol.Name}({paramTypes})";
         }
 
         /// <summary>

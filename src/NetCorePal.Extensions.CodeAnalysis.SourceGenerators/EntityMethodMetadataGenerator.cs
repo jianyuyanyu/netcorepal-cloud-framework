@@ -41,7 +41,8 @@ public class EntityMethodMetadataGenerator : IIncrementalGenerator
 
     private void ProcessMethods(SourceProductionContext spc, Compilation compilation, ImmutableArray<MethodDeclarationSyntax?> methodNodes)
     {
-        var metas = new List<(string EntityType, string MethodName, List<string> EventTypes, List<string> CalledEntityMethods)>();
+        // 使用字典来合并同名方法的依赖和事件
+        var metaDict = new Dictionary<(string EntityType, string MethodName), (HashSet<string> EventTypes, HashSet<string> CalledEntityMethods)>();
 
         foreach (var method in methodNodes)
         {
@@ -81,24 +82,36 @@ public class EntityMethodMetadataGenerator : IIncrementalGenerator
                     var targetType = invokedSymbol.ContainingType;
                     if (targetType != null && targetType.IsEntity())
                     {
-                        var invokedMethodName = GetMethodNameWithParameters(invokedSymbol);
+                        // 不包含参数签名，只使用方法名
+                        var invokedMethodName = invokedSymbol.Name;
                         calledEntityMethods.Add($"{targetType.ToDisplayString()}.{invokedMethodName}");
                     }
                 }
             }
             
-            // 为所有实体方法生成元数据，即使没有发出事件或调用其他实体方法
-            // 包含参数签名以支持方法重载
-            var methodNameWithParams = GetMethodNameWithParameters(methodSymbol);
-            metas.Add((containingType.ToDisplayString(), methodNameWithParams, eventTypes.ToList(), calledEntityMethods.ToList()));
+            // 合并同名方法的依赖和事件
+            var key = (containingType.ToDisplayString(), methodSymbol.Name);
+            if (!metaDict.ContainsKey(key))
+            {
+                metaDict[key] = (new HashSet<string>(), new HashSet<string>());
+            }
+            
+            // 合并事件类型和调用的实体方法
+            foreach (var evt in eventTypes)
+                metaDict[key].EventTypes.Add(evt);
+            foreach (var calledMethod in calledEntityMethods)
+                metaDict[key].CalledEntityMethods.Add(calledMethod);
         }
 
+        // 转换为列表
+        var metas = metaDict.Select(kvp => (kvp.Key.EntityType, kvp.Key.MethodName, kvp.Value.EventTypes.ToList(), kvp.Value.CalledEntityMethods.ToList())).ToList();
         GenerateMetadata(spc, metas, "EntityMethodMetadata.g.cs");
     }
 
     private void ProcessConstructors(SourceProductionContext spc, Compilation compilation, ImmutableArray<ConstructorDeclarationSyntax?> constructorNodes)
     {
-        var metas = new List<(string EntityType, string MethodName, List<string> EventTypes, List<string> CalledEntityMethods)>();
+        // 使用字典来合并同名构造函数的依赖和事件（所有构造函数合并为 .ctor）
+        var metaDict = new Dictionary<string, (HashSet<string> EventTypes, HashSet<string> CalledEntityMethods)>();
 
         foreach (var constructor in constructorNodes)
         {
@@ -138,17 +151,29 @@ public class EntityMethodMetadataGenerator : IIncrementalGenerator
                     var targetType = invokedSymbol.ContainingType;
                     if (targetType != null && targetType.IsEntity())
                     {
-                        var invokedMethodName = GetMethodNameWithParameters(invokedSymbol);
+                        // 不包含参数签名，只使用方法名
+                        var invokedMethodName = invokedSymbol.Name;
                         calledEntityMethods.Add($"{targetType.ToDisplayString()}.{invokedMethodName}");
                     }
                 }
             }
             
-            // 为所有实体构造函数生成元数据，包含参数签名
-            var ctorNameWithParams = GetMethodNameWithParameters(methodSymbol);
-            metas.Add((containingType.ToDisplayString(), ctorNameWithParams, eventTypes.ToList(), calledEntityMethods.ToList()));
+            // 合并所有构造函数的依赖和事件为 .ctor
+            var entityTypeKey = containingType.ToDisplayString();
+            if (!metaDict.ContainsKey(entityTypeKey))
+            {
+                metaDict[entityTypeKey] = (new HashSet<string>(), new HashSet<string>());
+            }
+            
+            // 合并事件类型和调用的实体方法
+            foreach (var evt in eventTypes)
+                metaDict[entityTypeKey].EventTypes.Add(evt);
+            foreach (var calledMethod in calledEntityMethods)
+                metaDict[entityTypeKey].CalledEntityMethods.Add(calledMethod);
         }
 
+        // 转换为列表
+        var metas = metaDict.Select(kvp => (kvp.Key, ".ctor", kvp.Value.EventTypes.ToList(), kvp.Value.CalledEntityMethods.ToList())).ToList();
         GenerateMetadata(spc, metas, "EntityConstructorMetadata.g.cs");
     }
 
@@ -168,23 +193,4 @@ public class EntityMethodMetadataGenerator : IIncrementalGenerator
         }
     }
 
-    /// <summary>
-    /// 获取方法名称及其参数签名，以支持方法重载
-    /// 格式: MethodName(ParamType1,ParamType2,...)
-    /// 例如: Create(string,int) 或 Update()
-    /// </summary>
-    private static string GetMethodNameWithParameters(IMethodSymbol methodSymbol)
-    {
-        var parameters = methodSymbol.Parameters;
-        if (parameters.Length == 0)
-        {
-            // 无参数方法或构造函数
-            return methodSymbol.MethodKind == MethodKind.Constructor ? ".ctor()" : $"{methodSymbol.Name}()";
-        }
-
-        var paramTypes = string.Join(",", parameters.Select(p => p.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
-        return methodSymbol.MethodKind == MethodKind.Constructor 
-            ? $".ctor({paramTypes})" 
-            : $"{methodSymbol.Name}({paramTypes})";
-    }
 }

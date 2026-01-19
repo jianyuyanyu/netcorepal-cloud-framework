@@ -15,39 +15,39 @@ public class EntityMethodMetadataGeneratorTests
             .ToList();
         Assert.NotNull(attrs);
         
-        // 测试实例方法 - 现在包含参数签名
+        // 测试实例方法 - 不包含参数签名
         Assert.Contains(attrs, a => a.EntityType == "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.TestAggregateRoot"
-            && a.MethodName == "ChangeName(string)"
+            && a.MethodName == "ChangeName"
             && a.EventTypes.SequenceEqual(new[]{"NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.TestAggregateRootNameChangedDomainEvent"})
             && a.CalledEntityMethods.Length == 0);
             
-        // 测试私有方法 - 现在包含参数签名
+        // 测试私有方法 - 不包含参数签名
         Assert.Contains(attrs, a => a.EntityType == "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.TestAggregateRoot"
-            && a.MethodName == "PrivateMethod()"
+            && a.MethodName == "PrivateMethod"
             && a.EventTypes.SequenceEqual(new[]{"NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.TestPrivateMethodDomainEvent"})
-            && a.CalledEntityMethods.SequenceEqual(new[]{"NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.TestEntity.ChangeTestEntityName(string)"}));
+            && a.CalledEntityMethods.SequenceEqual(new[]{"NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.TestEntity.ChangeTestEntityName"}));
             
-        // 测试实体方法 - 现在包含参数签名
+        // 测试实体方法 - 不包含参数签名
         Assert.Contains(attrs, a => a.EntityType == "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.TestEntity"
-            && a.MethodName == "ChangeTestEntityName(string)"
+            && a.MethodName == "ChangeTestEntityName"
             && a.EventTypes.SequenceEqual(new[]{"NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.TestEntityNameChangedDomainEvent"})
             && a.CalledEntityMethods.Length == 0);
             
-        // 测试构造函数 - 现在包含参数签名
+        // 测试构造函数 - 不包含参数签名
         Assert.Contains(attrs, a => a.EntityType == "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.TestAggregateRoot"
-            && a.MethodName.StartsWith(".ctor(")
+            && a.MethodName == ".ctor"
             && a.EventTypes.Length >= 0
             && a.CalledEntityMethods.Length >= 0);
             
-        // 测试静态方法 - 现在包含参数签名
+        // 测试静态方法 - 不包含参数签名
         Assert.Contains(attrs, a => a.EntityType == "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.TestAggregateRoot"
-            && a.MethodName == "Create(TestAggregateRootId)"
+            && a.MethodName == "Create"
             && a.EventTypes.Length == 0
             && a.CalledEntityMethods.Length == 0);
     }
     
     [Fact]
-    public void Should_Generate_Unique_Metadata_For_Overloaded_Methods()
+    public void Should_Merge_Metadata_For_Overloaded_Methods()
     {
         var assembly = typeof(EntityMethodMetadataGeneratorTests).Assembly;
         var attrs = assembly.GetCustomAttributes(typeof(NetCorePal.Extensions.CodeAnalysis.Attributes.EntityMethodMetadataAttribute), false)
@@ -55,24 +55,20 @@ public class EntityMethodMetadataGeneratorTests
             .Where(a => a.EntityType == "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.OverloadedEntity")
             .ToList();
         
-        // 验证方法重载生成了不同的元数据
-        // 构造函数重载
-        Assert.Contains(attrs, a => a.MethodName == ".ctor(OverloadedEntityId)");
-        Assert.Contains(attrs, a => a.MethodName == ".ctor(OverloadedEntityId,string)");
-        Assert.Contains(attrs, a => a.MethodName == ".ctor(OverloadedEntityId,string,int)");
+        // 验证方法重载被合并为单个元数据
+        // 构造函数重载应该合并为一个 .ctor
+        var ctorAttrs = attrs.Where(a => a.MethodName == ".ctor").ToList();
+        Assert.Single(ctorAttrs); // 只应该有一个 .ctor 元数据
         
-        // Create 静态方法重载
-        Assert.Contains(attrs, a => a.MethodName == "Create()");
-        Assert.Contains(attrs, a => a.MethodName == "Create(string)");
-        Assert.Contains(attrs, a => a.MethodName == "Create(string,int)");
+        // Create 静态方法重载应该合并为一个 Create
+        var createAttrs = attrs.Where(a => a.MethodName == "Create").ToList();
+        Assert.Single(createAttrs); // 只应该有一个 Create 元数据
         
-        // Update 实例方法重载
-        Assert.Contains(attrs, a => a.MethodName == "Update()");
-        Assert.Contains(attrs, a => a.MethodName == "Update(string)");
-        Assert.Contains(attrs, a => a.MethodName == "Update(string,int)");
+        // Update 实例方法重载应该合并为一个 Update
+        var updateAttrs = attrs.Where(a => a.MethodName == "Update").ToList();
+        Assert.Single(updateAttrs); // 只应该有一个 Update 元数据
         
-        // 验证没有重复的键
-        var methodNames = attrs.Select(a => a.MethodName).ToList();
-        Assert.Equal(methodNames.Count, methodNames.Distinct().Count());
+        // 总共应该有 3 个元数据项（.ctor, Create, Update）
+        Assert.Equal(3, attrs.Count);
     }
 }
