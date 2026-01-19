@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using NetCorePal.Extensions.CodeAnalysis;
+using NetCorePal.Extensions.CodeAnalysis.Attributes;
 using NetCorePal.Extensions.CodeAnalysis.Snapshots;
 using Xunit;
 
@@ -30,7 +31,11 @@ public class CodeFlowAnalysisSnapshotHelperTests
         Assert.Equal(1, snapshot.Metadata.RelationshipCount);
         Assert.NotNull(snapshot.Metadata.Hash);
         Assert.NotEmpty(snapshot.Metadata.Hash);
-        Assert.Equal(analysisResult, snapshot.AnalysisResult);
+        
+        // GetAnalysisResult() should return equivalent result
+        var result = snapshot.GetAnalysisResult();
+        Assert.Equal(analysisResult.Nodes.Count, result.Nodes.Count);
+        Assert.Equal(analysisResult.Relationships.Count, result.Relationships.Count);
     }
 
     [Fact]
@@ -67,7 +72,13 @@ public class CodeFlowAnalysisSnapshotHelperTests
         };
 
         // Act
-        var code = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(analysisResult, metadata, null);
+        // Create simple metadata attributes for testing
+        var attributes = new MetadataAttribute[]
+        {
+            new EntityMetadataAttribute("TestEntity", true, new string[] {}, new string[] {"TestMethod"}),
+            new EntityMethodMetadataAttribute("TestEntity", "TestMethod", new string[] {"TestEvent"}, new string[] {})
+        };
+        var code = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(attributes, metadata, null);
 
         // Assert
         Assert.NotNull(code);
@@ -75,7 +86,7 @@ public class CodeFlowAnalysisSnapshotHelperTests
         Assert.Contains("public partial class 20260116120000 : CodeFlowAnalysisSnapshot", code);
         Assert.Contains("namespace CodeAnalysisSnapshots", code);
         Assert.Contains("Metadata = new SnapshotMetadata", code);
-        Assert.Contains("AnalysisResult = new CodeFlowAnalysisResult", code);
+        Assert.Contains("MetadataAttributes = new MetadataAttribute[]", code); // Changed from AnalysisResult
         Assert.Contains("Version = \"20260116120000\"", code);
         Assert.Contains("Description = \"Test snapshot\"", code);
     }
@@ -96,7 +107,13 @@ public class CodeFlowAnalysisSnapshotHelperTests
         };
 
         // Act
-        var code = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(analysisResult, metadata, "InitialCreate");
+        // Create simple metadata attributes for testing
+        var attributes = new MetadataAttribute[]
+        {
+            new EntityMetadataAttribute("TestEntity", true, new string[] {}, new string[] {"TestMethod"}),
+            new EntityMethodMetadataAttribute("TestEntity", "TestMethod", new string[] {"TestEvent"}, new string[] {})
+        };
+        var code = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(attributes, metadata, "InitialCreate");
 
         // Assert
         Assert.Contains("public partial class 20260116120000_InitialCreate : CodeFlowAnalysisSnapshot", code);
@@ -254,7 +271,13 @@ public class CodeFlowAnalysisSnapshotHelperTests
         };
 
         // Act
-        var code = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(analysisResult, metadata, null);
+        // Create simple metadata attributes for testing with special characters
+        var attributes = new MetadataAttribute[]
+        {
+            new EntityMetadataAttribute("Test\"Quote", true, new string[] {}, new string[] {"Test\\Backslash"}),
+            new EntityMethodMetadataAttribute("TestEntity", "TestMethod", new string[] {}, new string[] {})
+        };
+        var code = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(attributes, metadata, null);
 
         // Assert
         Assert.Contains("Test\\\"Quote", code); // Escaped quote
@@ -292,7 +315,14 @@ public class CodeFlowAnalysisSnapshotHelperTests
         // Act - Should not throw "An item with the same key has already been added" exception
         var exception = Record.Exception(() =>
         {
-            var code = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(analysisResult, metadata, "TestSnapshot");
+            // Create metadata attributes with duplicate node IDs (same entity method multiple times)
+            var attributes = new MetadataAttribute[]
+            {
+                new EntityMetadataAttribute("TestEntity", true, new string[] {}, new string[] {"DuplicateMethod"}),
+                new EntityMethodMetadataAttribute("TestEntity", "DuplicateMethod", new string[] {"Event1"}, new string[] {}),
+                new EntityMethodMetadataAttribute("TestEntity", "DuplicateMethod", new string[] {"Event2"}, new string[] {}) // Duplicate
+            };
+            var code = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(attributes, metadata, "TestSnapshot");
             Assert.NotNull(code);
             Assert.Contains("public partial class", code);
             Assert.Contains("TestSnapshot", code);

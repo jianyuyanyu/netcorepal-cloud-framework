@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using NetCorePal.Extensions.CodeAnalysis;
+using NetCorePal.Extensions.CodeAnalysis.Attributes;
 using NetCorePal.Extensions.CodeAnalysis.Snapshots;
 using Xunit;
 
@@ -212,11 +213,24 @@ public class SnapshotComparerTests
                 NodeCount = nodes.Count,
                 RelationshipCount = relationships.Count
             };
-            AnalysisResult = new CodeFlowAnalysisResult
+            
+            // Create simple metadata attributes for testing
+            // In a real snapshot, these would be extracted from assemblies
+            var attrs = new List<MetadataAttribute>();
+            
+            // Add entity metadata based on nodes
+            foreach (var node in nodes.Where(n => n.Type == NodeType.Aggregate))
             {
-                Nodes = nodes,
-                Relationships = relationships
-            };
+                attrs.Add(new EntityMetadataAttribute(node.Id, true, new string[] {}, new string[] {}));
+            }
+            
+            // Add method metadata based on relationships  
+            foreach (var rel in relationships.Where(r => r.Type == RelationshipType.EntityMethodToEntityMethod))
+            {
+                attrs.Add(new EntityMethodMetadataAttribute("TestEntity", rel.FromNode.Id, new string[] {}, new string[] {rel.ToNode.Id}));
+            }
+            
+            MetadataAttributes = attrs.ToArray();
         }
     }
 }
