@@ -1150,7 +1150,7 @@ public class Program
         };
 
         // 生成C#代码
-        var csharpCode = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(analysisResult, metadata);
+        var csharpCode = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(metadata);
         
         // 保存到.cs文件
         var fileName = $"Snapshot_{version}.cs";

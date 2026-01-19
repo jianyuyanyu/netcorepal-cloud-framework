@@ -93,27 +93,26 @@ public static class CodeFlowAnalysisSnapshotHelper
     {
         // Generate code based on MetadataAttributes instead of AnalysisResult
         var analysisResult = CodeFlowAnalysisHelper.GetResultFromAttributes(metadataAttributes);
-        return GenerateSnapshotCodeFromResult(analysisResult, metadataAttributes, metadata, snapshotName);
+        return GenerateSnapshotCodeFromResult(metadataAttributes, metadata, snapshotName);
     }
     
     /// <summary>
     /// 基于分析结果和元数据，生成C#快照类代码（继承自CodeFlowAnalysisSnapshot抽象基类）
     /// 该方法用于向后兼容
     /// </summary>
-    /// <param name="analysisResult">分析结果</param>
     /// <param name="metadata">快照元数据</param>
     /// <param name="snapshotName">快照名称（可选，用于生成更具描述性的类名）</param>
     /// <returns>C#代码字符串</returns>
-    public static string GenerateSnapshotCode(CodeFlowAnalysisResult analysisResult, SnapshotMetadata metadata, string? snapshotName = null)
+    public static string GenerateSnapshotCode(SnapshotMetadata metadata, string? snapshotName = null)
     {
         // For backward compatibility - generate from AnalysisResult but note that MetadataAttributes won't be preserved
-        return GenerateSnapshotCodeFromResult(analysisResult, Array.Empty<Attributes.MetadataAttribute>(), metadata, snapshotName);
+        return GenerateSnapshotCodeFromResult(Array.Empty<Attributes.MetadataAttribute>(), metadata, snapshotName);
     }
     
     /// <summary>
     /// 内部方法：基于分析结果、MetadataAttributes和元数据，生成C#快照类代码
     /// </summary>
-    private static string GenerateSnapshotCodeFromResult(CodeFlowAnalysisResult analysisResult, Attributes.MetadataAttribute[] metadataAttributes, SnapshotMetadata metadata, string? snapshotName)
+    private static string GenerateSnapshotCodeFromResult(Attributes.MetadataAttribute[] metadataAttributes, SnapshotMetadata metadata, string? snapshotName)
     {
         var sb = new StringBuilder();
         
