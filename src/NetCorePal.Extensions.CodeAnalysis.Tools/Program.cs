@@ -889,7 +889,7 @@ public class Program
             Directory.CreateDirectory(tempWorkDir);
             
             // Copy NuGet.config if it exists (searches current dir and parents, plus project root)
-            var projectRootDir = DetermineProjectRootDirectory(solutionFile, allProjects);
+            var projectRootDir = DetermineProjectRootDirectory(null, allProjects); // No solution file in snapshot command
             CopyNuGetConfigIfExists(projectRootDir, tempWorkDir, verbose);
             
             var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
