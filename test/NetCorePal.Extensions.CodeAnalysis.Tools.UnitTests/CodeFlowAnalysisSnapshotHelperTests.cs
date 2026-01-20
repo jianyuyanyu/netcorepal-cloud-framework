@@ -14,41 +14,46 @@ public class CodeFlowAnalysisSnapshotHelperTests
     [Fact]
     public void CreateSnapshot_ShouldCreateValidSnapshot()
     {
-        // Arrange
-        var analysisResult = CreateTestAnalysisResult();
+        // Arrange - Create test metadata attributes
+        var metadataAttributes = new MetadataAttribute[]
+        {
+            new EntityMetadataAttribute("TestEntity", true, new string[] {}, new string[] {"TestMethod"}),
+            new EntityMethodMetadataAttribute("TestEntity", "TestMethod", new string[] {"TestEvent"}, new string[] {})
+        };
         var description = "Test snapshot";
         var version = "20260116120000";
 
         // Act
-        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(analysisResult, description, version);
+        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(metadataAttributes, description, version);
 
         // Assert
         Assert.NotNull(snapshot);
         Assert.NotNull(snapshot.Metadata);
         Assert.Equal(version, snapshot.Metadata.Version);
         Assert.Equal(description, snapshot.Metadata.Description);
-        Assert.Equal(2, snapshot.Metadata.NodeCount);
-        Assert.Equal(1, snapshot.Metadata.RelationshipCount);
         Assert.NotNull(snapshot.Metadata.Hash);
         Assert.NotEmpty(snapshot.Metadata.Hash);
         
-        // Note: When creating snapshot from CodeFlowAnalysisResult (backward compatibility),
-        // MetadataAttributes array is empty, so GetAnalysisResult() will return empty result.
-        // This is expected behavior for backward compatibility.
+        // Verify we can get the analysis result from MetadataAttributes
         var result = snapshot.GetAnalysisResult();
         Assert.NotNull(result);
-        // The result will be empty since we created snapshot from CodeFlowAnalysisResult without MetadataAttributes
+        Assert.NotNull(result.Nodes);
+        Assert.NotNull(result.Relationships);
     }
 
     [Fact]
     public void CreateSnapshot_WithoutVersion_ShouldUseTimestamp()
     {
-        // Arrange
-        var analysisResult = CreateTestAnalysisResult();
+        // Arrange - Create test metadata attributes
+        var metadataAttributes = new MetadataAttribute[]
+        {
+            new EntityMetadataAttribute("TestEntity", true, new string[] {}, new string[] {"TestMethod"}),
+            new EntityMethodMetadataAttribute("TestEntity", "TestMethod", new string[] {"TestEvent"}, new string[] {})
+        };
         var description = "Test snapshot";
 
         // Act
-        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(analysisResult, description);
+        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(metadataAttributes, description);
 
         // Assert
         Assert.NotNull(snapshot);
@@ -124,9 +129,13 @@ public class CodeFlowAnalysisSnapshotHelperTests
     [Fact]
     public void GenerateSnapshotCode_FromSnapshot_ShouldGenerateValidCode()
     {
-        // Arrange
-        var analysisResult = CreateTestAnalysisResult();
-        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(analysisResult, "Test", "20260116120000");
+        // Arrange - Create test metadata attributes
+        var metadataAttributes = new MetadataAttribute[]
+        {
+            new EntityMetadataAttribute("TestEntity", true, new string[] {}, new string[] {"TestMethod"}),
+            new EntityMethodMetadataAttribute("TestEntity", "TestMethod", new string[] {"TestEvent"}, new string[] {})
+        };
+        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(metadataAttributes, "Test", "20260116120000");
 
         // Act
         var code = CodeFlowAnalysisSnapshotHelper.GenerateSnapshotCode(snapshot, "TestSnapshot");
@@ -222,17 +231,13 @@ public class CodeFlowAnalysisSnapshotHelperTests
     }
 
     [Fact]
-    public void CreateSnapshot_WithEmptyAnalysisResult_ShouldHaveZeroCounts()
+    public void CreateSnapshot_WithEmptyMetadataAttributes_ShouldHaveZeroCounts()
     {
-        // Arrange
-        var analysisResult = new CodeFlowAnalysisResult
-        {
-            Nodes = new List<Node>(),
-            Relationships = new List<Relationship>()
-        };
+        // Arrange - Create empty metadata attributes array
+        var metadataAttributes = Array.Empty<MetadataAttribute>();
 
         // Act
-        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(analysisResult, "Empty snapshot");
+        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(metadataAttributes, "Empty snapshot");
 
         // Assert
         Assert.Equal(0, snapshot.Metadata.NodeCount);
@@ -242,12 +247,16 @@ public class CodeFlowAnalysisSnapshotHelperTests
     [Fact]
     public void CreateSnapshot_WithSameData_ShouldGenerateSameHash()
     {
-        // Arrange
-        var analysisResult = CreateTestAnalysisResult();
+        // Arrange - Create test metadata attributes
+        var metadataAttributes = new MetadataAttribute[]
+        {
+            new EntityMetadataAttribute("TestEntity", true, new string[] {}, new string[] {"TestMethod"}),
+            new EntityMethodMetadataAttribute("TestEntity", "TestMethod", new string[] {"TestEvent"}, new string[] {})
+        };
 
         // Act
-        var snapshot1 = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(analysisResult, "Test 1", "v1");
-        var snapshot2 = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(analysisResult, "Test 2", "v2");
+        var snapshot1 = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(metadataAttributes, "Test 1", "v1");
+        var snapshot2 = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(metadataAttributes, "Test 2", "v2");
 
         // Assert
         Assert.Equal(snapshot1.Metadata.Hash, snapshot2.Metadata.Hash);

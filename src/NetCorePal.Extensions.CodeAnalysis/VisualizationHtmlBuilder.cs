@@ -27,6 +27,9 @@ namespace NetCorePal.Extensions.CodeAnalysis
             bool withHistory = true,
             System.Collections.Generic.List<Snapshots.CodeFlowAnalysisSnapshot>? snapshots = null)
         {
+            // Determine which result to use for visualization
+            CodeFlowAnalysisResult resultToVisualize;
+            
             // 准备快照集合
             var snapshotList = new System.Collections.Generic.List<Snapshots.CodeFlowAnalysisSnapshot>();
             
@@ -34,25 +37,21 @@ namespace NetCorePal.Extensions.CodeAnalysis
             {
                 // 使用提供的快照
                 snapshotList = snapshots;
+                resultToVisualize = snapshotList[0].GetAnalysisResult();
             }
             else
             {
-                // 没有快照时，使用当前分析结果构造一个快照
-                var currentSnapshot = Snapshots.CodeFlowAnalysisSnapshotHelper.CreateSnapshot(
-                    analysisResult, 
-                    "当前版本");
-                
-                snapshotList.Add(currentSnapshot);
+                // 没有快照时，直接使用当前分析结果
+                resultToVisualize = analysisResult;
             }
 
-            // 使用最新快照生成Mermaid图表
-            var latestResult = snapshotList[0].GetAnalysisResult();
+            // 使用确定的结果生成Mermaid图表
             var architectureOverviewMermaid =
-                MermaidVisualizers.ArchitectureOverviewMermaidVisualizer.GenerateMermaid(latestResult);
+                MermaidVisualizers.ArchitectureOverviewMermaidVisualizer.GenerateMermaid(resultToVisualize);
             var allProcessingFlowMermaid =
-                MermaidVisualizers.ProcessingFlowMermaidVisualizer.GenerateMermaid(latestResult);
+                MermaidVisualizers.ProcessingFlowMermaidVisualizer.GenerateMermaid(resultToVisualize);
             var allAggregateMermaid =
-                MermaidVisualizers.AggregateRelationMermaidVisualizer.GenerateAllAggregateMermaid(latestResult);
+                MermaidVisualizers.AggregateRelationMermaidVisualizer.GenerateAllAggregateMermaid(resultToVisualize);
 
             // 读取嵌入资源模板内容
             var assembly = typeof(VisualizationHtmlBuilder).Assembly;

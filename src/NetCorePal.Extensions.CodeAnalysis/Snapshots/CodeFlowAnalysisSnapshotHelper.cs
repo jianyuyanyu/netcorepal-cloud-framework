@@ -43,36 +43,6 @@ public static class CodeFlowAnalysisSnapshotHelper
     }
     
     /// <summary>
-    /// 基于CodeFlowAnalysisResult构造CodeFlowAnalysisSnapshot实例（向后兼容）
-    /// 注意：此方法创建的快照不包含原始MetadataAttributes，但会缓存分析结果以便后续使用
-    /// </summary>
-    /// <param name="analysisResult">分析结果</param>
-    /// <param name="description">快照描述</param>
-    /// <param name="version">快照版本号（可选，默认使用时间戳）</param>
-    /// <returns>快照实例</returns>
-    public static CodeFlowAnalysisSnapshot CreateSnapshot(
-        CodeFlowAnalysisResult analysisResult, 
-        string description, 
-        string? version = null)
-    {
-        version ??= DateTime.Now.ToString("yyyyMMddHHmmss");
-        
-        var metadata = new SnapshotMetadata
-        {
-            Version = version,
-            Timestamp = DateTime.Now,
-            Description = description,
-            Hash = ComputeHash(analysisResult),
-            NodeCount = analysisResult.Nodes.Count,
-            RelationshipCount = analysisResult.Relationships.Count
-        };
-        
-        // Create empty MetadataAttributes array since we don't have the original attributes
-        // Pass the original analysisResult as cached result so GetAnalysisResult() can return it
-        return new RuntimeSnapshot(metadata, Array.Empty<Attributes.MetadataAttribute>(), analysisResult);
-    }
-    
-    /// <summary>
     /// 基于CodeFlowAnalysisSnapshot实例，生成C#快照类代码（继承自CodeFlowAnalysisSnapshot抽象基类）
     /// </summary>
     /// <param name="snapshot">快照实例</param>
@@ -391,32 +361,5 @@ public static class CodeFlowAnalysisSnapshotHelper
             .Replace("\n", "\\n")
             .Replace("\r", "\\r")
             .Replace("\t", "\\t");
-    }
-    
-    /// <summary>
-    /// Runtime snapshot implementation used by helper methods
-    /// </summary>
-    private class RuntimeSnapshot : CodeFlowAnalysisSnapshot
-    {
-        private readonly CodeFlowAnalysisResult? _cachedResult;
-        
-        public RuntimeSnapshot(SnapshotMetadata metadata, Attributes.MetadataAttribute[] metadataAttributes, CodeFlowAnalysisResult? cachedResult = null)
-        {
-            Metadata = metadata;
-            MetadataAttributes = metadataAttributes;
-            _cachedResult = cachedResult;
-        }
-        
-        public new CodeFlowAnalysisResult GetAnalysisResult()
-        {
-            // If we have a cached result (from backward compatibility), return it
-            if (_cachedResult != null)
-            {
-                return _cachedResult;
-            }
-            
-            // Otherwise, reconstruct from MetadataAttributes
-            return base.GetAnalysisResult();
-        }
     }
 }

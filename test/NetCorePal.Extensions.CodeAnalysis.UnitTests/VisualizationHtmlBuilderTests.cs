@@ -38,9 +38,17 @@ public class VisualizationHtmlBuilderTests
     [Fact]
     public void GenerateVisualizationHtml_ShouldContainStatisticsMenuAndData()
     {
-        var result = CodeFlowAnalysisHelper.GetResultFromAssemblies(typeof(VisualizationHtmlBuilderTests).Assembly);
+        // Get metadata attributes from assemblies for creating snapshot
+        var metadataAttributes = CodeFlowAnalysisHelper.GetAllMetadataAttributes(typeof(VisualizationHtmlBuilderTests).Assembly).ToArray();
         
-        var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result);
+        // Create a snapshot from metadata attributes
+        var snapshot = Snapshots.CodeFlowAnalysisSnapshotHelper.CreateSnapshot(metadataAttributes, "Test snapshot");
+        var snapshots = new System.Collections.Generic.List<Snapshots.CodeFlowAnalysisSnapshot> { snapshot };
+        
+        // Get result for passing to GenerateVisualizationHtml
+        var result = snapshot.GetAnalysisResult();
+        
+        var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, withHistory: true, snapshots: snapshots);
         
         // 验证统计信息菜单存在
         Assert.Contains("📊 统计信息", html);
