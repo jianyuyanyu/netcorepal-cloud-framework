@@ -54,7 +54,8 @@ internal static class AppCsContentGenerator
         sb.AppendLine();
 
         sb.AppendLine("// Get MetadataAttributes from assemblies for snapshot creation");
-        sb.AppendLine("var metadataAttributes = CodeFlowAnalysisHelper.GetAllMetadataAttributes(assemblies);");
+        sb.AppendLine("var metadataAttributesList = CodeFlowAnalysisHelper.GetAllMetadataAttributes(assemblies);");
+        sb.AppendLine("var metadataAttributes = metadataAttributesList.ToArray();");
         sb.AppendLine("var result = CodeFlowAnalysisHelper.GetResultFromAttributes(metadataAttributes);");
         sb.AppendLine();
 

@@ -69,7 +69,8 @@ public static class SnapshotAppCsGenerator
         sb.AppendLine();
 
         sb.AppendLine("// 获取所有MetadataAttribute");
-        sb.AppendLine("var attributes = CodeFlowAnalysisHelper.GetAllMetadataAttributes(assemblies);");
+        sb.AppendLine("var attributesList = CodeFlowAnalysisHelper.GetAllMetadataAttributes(assemblies);");
+        sb.AppendLine("var attributes = attributesList.ToArray();");
         sb.AppendLine();
 
         // 生成快照代码
@@ -78,7 +79,7 @@ public static class SnapshotAppCsGenerator
         var escapedSnapshotName = snapshotName != null ? snapshotName.Replace("\\", "\\\\").Replace("\"", "\\\"") : null;
         
         sb.AppendLine("// 创建快照实例");
-        sb.AppendLine($"var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(attributes.ToArray(), \"{escapedDescription}\", \"{version}\");");
+        sb.AppendLine($"var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(attributes, \"{escapedDescription}\", \"{version}\");");
         sb.AppendLine();
         
         sb.AppendLine("// 生成快照C#代码");
