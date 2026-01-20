@@ -44,7 +44,7 @@ public static class CodeFlowAnalysisSnapshotHelper
     
     /// <summary>
     /// 基于CodeFlowAnalysisResult构造CodeFlowAnalysisSnapshot实例（向后兼容）
-    /// 注意：此方法创建的快照不包含原始MetadataAttributes
+    /// 注意：此方法创建的快照不包含原始MetadataAttributes，但会缓存分析结果以便后续使用
     /// </summary>
     /// <param name="analysisResult">分析结果</param>
     /// <param name="description">快照描述</param>
@@ -68,7 +68,8 @@ public static class CodeFlowAnalysisSnapshotHelper
         };
         
         // Create empty MetadataAttributes array since we don't have the original attributes
-        return new RuntimeSnapshot(metadata, Array.Empty<Attributes.MetadataAttribute>());
+        // Pass the original analysisResult as cached result so GetAnalysisResult() can return it
+        return new RuntimeSnapshot(metadata, Array.Empty<Attributes.MetadataAttribute>(), analysisResult);
     }
     
     /// <summary>
@@ -397,10 +398,25 @@ public static class CodeFlowAnalysisSnapshotHelper
     /// </summary>
     private class RuntimeSnapshot : CodeFlowAnalysisSnapshot
     {
-        public RuntimeSnapshot(SnapshotMetadata metadata, Attributes.MetadataAttribute[] metadataAttributes)
+        private readonly CodeFlowAnalysisResult? _cachedResult;
+        
+        public RuntimeSnapshot(SnapshotMetadata metadata, Attributes.MetadataAttribute[] metadataAttributes, CodeFlowAnalysisResult? cachedResult = null)
         {
             Metadata = metadata;
             MetadataAttributes = metadataAttributes;
+            _cachedResult = cachedResult;
+        }
+        
+        public new CodeFlowAnalysisResult GetAnalysisResult()
+        {
+            // If we have a cached result (from backward compatibility), return it
+            if (_cachedResult != null)
+            {
+                return _cachedResult;
+            }
+            
+            // Otherwise, reconstruct from MetadataAttributes
+            return base.GetAnalysisResult();
         }
     }
 }
