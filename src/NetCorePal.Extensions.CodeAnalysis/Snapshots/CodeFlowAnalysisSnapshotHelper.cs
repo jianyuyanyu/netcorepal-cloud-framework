@@ -216,7 +216,8 @@ public static class CodeFlowAnalysisSnapshotHelper
             return "new string[] { }";
         }
         
-        var items = array.Select(s => EscapeCSharpString(s));
+        // Add quotes around each escaped string
+        var items = array.Select(s => $"\"{EscapeCSharpString(s)}\"");
         return $"new string[] {{ {string.Join(", ", items)} }}";
     }
     
@@ -280,12 +281,13 @@ public static class CodeFlowAnalysisSnapshotHelper
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return $"{version}";
+            // Always use "Snapshot_" prefix to avoid class names starting with digits
+            return $"Snapshot_{version}";
         }
         
         // 清理名称，确保是有效的C#标识符
         var sanitizedName = SanitizeIdentifier(name);
-        return $"{version}_{sanitizedName}";
+        return $"Snapshot_{version}_{sanitizedName}";
     }
     
     /// <summary>

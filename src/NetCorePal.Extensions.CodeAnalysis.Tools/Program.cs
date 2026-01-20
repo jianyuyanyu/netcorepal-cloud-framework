@@ -1015,9 +1015,19 @@ public class Program
                     ExitHandler.Exit(1);
                 }
 
+                // Parse output to extract actual file path and name
+                var output = outputBuilder.ToString();
+                var filePathMatch = System.Text.RegularExpressions.Regex.Match(output, @"快照文件已生成:\s*(.+)");
+                var actualFileName = "Unknown";
+                if (filePathMatch.Success && filePathMatch.Groups.Count > 1)
+                {
+                    var filePath = filePathMatch.Groups[1].Value.Trim();
+                    actualFileName = Path.GetFileName(filePath);
+                }
+
                 // Snapshot file has been created by the app.cs
                 Console.WriteLine($"✅ Snapshot created successfully: {version}");
-                Console.WriteLine($"  Snapshot file: Snapshot_{version}.cs");
+                Console.WriteLine($"  Snapshot file: {actualFileName}");
                 Console.WriteLine($"  Description: {description}");
             }
             finally

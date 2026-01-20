@@ -111,7 +111,7 @@ public static class SnapshotAppCsGenerator
         sb.AppendLine("var filePath = Path.Combine(snapshotDir, fileName);");
         sb.AppendLine("File.WriteAllText(filePath, snapshotCode);");
         sb.AppendLine();
-        sb.AppendLine("Console.WriteLine($\"快照文件已生成: {{filePath}}\");");
+        sb.AppendLine("Console.WriteLine($\"快照文件已生成: {filePath}\");");
         sb.AppendLine("Console.WriteLine($\"  版本: {snapshot.Metadata.Version}\");");
         sb.AppendLine("Console.WriteLine($\"  节点数: {snapshot.Metadata.NodeCount}\");");
         sb.AppendLine("Console.WriteLine($\"  关系数: {snapshot.Metadata.RelationshipCount}\");");
