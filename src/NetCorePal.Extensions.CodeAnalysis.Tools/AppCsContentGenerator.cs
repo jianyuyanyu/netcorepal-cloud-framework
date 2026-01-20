@@ -53,7 +53,9 @@ internal static class AppCsContentGenerator
         sb.AppendLine("    .ToArray();");
         sb.AppendLine();
 
-        sb.AppendLine("var result = CodeFlowAnalysisHelper.GetResultFromAssemblies(assemblies);");
+        sb.AppendLine("// Get MetadataAttributes from assemblies for snapshot creation");
+        sb.AppendLine("var metadataAttributes = CodeFlowAnalysisHelper.GetAllMetadataAttributes(assemblies);");
+        sb.AppendLine("var result = CodeFlowAnalysisHelper.GetResultFromAttributes(metadataAttributes);");
         sb.AppendLine();
 
         // Use verbatim strings with proper escaping for title and outputPath
@@ -65,12 +67,10 @@ internal static class AppCsContentGenerator
         if (withHistory && !string.IsNullOrEmpty(snapshotDir))
         {
             var escapedSnapshotDir = snapshotDir.Replace("\"", "\"\"");
-            sb.AppendLine("// Load existing snapshots if available");
-            sb.AppendLine($"var snapshotDir = @\"{escapedSnapshotDir}\";");
-            sb.AppendLine("List<CodeFlowAnalysisSnapshot> snapshots = null;");
-            sb.AppendLine("// Note: Snapshot loading would require additional logic here");
-            sb.AppendLine("// For now, pass null and let GenerateVisualizationHtml create a current snapshot");
-            sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\", withHistory: true, snapshots: null);");
+            sb.AppendLine("// Create current snapshot from MetadataAttributes");
+            sb.AppendLine($"var currentSnapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(metadataAttributes, \"当前版本\");");
+            sb.AppendLine("var snapshots = new List<CodeFlowAnalysisSnapshot> { currentSnapshot };");
+            sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\", withHistory: true, snapshots: snapshots);");
         }
         else
         {
