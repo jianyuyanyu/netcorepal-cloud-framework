@@ -1148,20 +1148,46 @@
                 return;
             }
             
+            // 定义要显示的节点类型（与统计信息页面保持一致）
+            const displayNodeTypes = [
+                'Controller',
+                'Endpoint', 
+                'CommandSender',
+                'Command',
+                'CommandHandler',
+                'Aggregate',
+                'DomainEvent',
+                'IntegrationEvent',
+                'DomainEventHandler',
+                'IntegrationEventHandler',
+                'IntegrationEventConverter'
+            ];
+            
+            // 定义要显示的关系类型（与统计信息页面保持一致）
+            const displayRelationshipTypes = [
+                'ControllerToCommand',
+                'EndpointToCommand',
+                'CommandSenderToCommand',
+                'CommandToAggregate',
+                'AggregateToDomainEvent',
+                'DomainEventToHandler',
+                'DomainEventHandlerToCommand',
+                'IntegrationEventToHandler',
+                'IntegrationEventHandlerToCommand',
+                'DomainEventToIntegrationEvent'
+            ];
+            
             // 准备图表数据
             const labels = dataSources.map(ds => {
                 const meta = ds.metadata;
                 return meta.description || `版本 ${meta.version}`;
             });
             
-            // 提取节点类型统计数据
-            const nodeTypes = ['Aggregate', 'Command', 'DomainEvent', 'CommandHandler', 'DomainEventHandler', 
-                              'IntegrationEventHandler', 'ControllerMethod', 'CommandSender', 'Endpoint'];
-            
-            const nodeDatasets = nodeTypes.map((type, index) => {
+            // 提取节点类型统计数据（使用过滤后的类型）
+            const nodeDatasets = displayNodeTypes.map((type, index) => {
                 const colors = [
                     '#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
-                    '#1abc9c', '#e67e22', '#34495e', '#16a085'
+                    '#1abc9c', '#e67e22', '#34495e', '#16a085', '#3498db', '#e74c3c'
                 ];
                 
                 return {
@@ -1175,15 +1201,11 @@
                 };
             });
             
-            // 提取关系类型统计数据
-            const relationshipTypes = ['CommandHandlerToAggregate', 'CommandToHandler', 'AggregateToEntity', 
-                                      'EntityMethodToDomainEvent', 'DomainEventToHandler', 'CommandHandlerToCommandSender',
-                                      'ControllerToCommand', 'EndpointToCommand'];
-            
-            const relationshipDatasets = relationshipTypes.map((type, index) => {
+            // 提取关系类型统计数据（使用过滤后的类型）
+            const relationshipDatasets = displayRelationshipTypes.map((type, index) => {
                 const colors = [
                     '#8e44ad', '#c0392b', '#27ae60', '#d35400', '#2980b9',
-                    '#16a085', '#f39c12', '#7f8c8d'
+                    '#16a085', '#f39c12', '#7f8c8d', '#3498db', '#e74c3c'
                 ];
                 
                 return {
@@ -1197,11 +1219,14 @@
                 };
             });
             
-            // 总体统计数据
+            // 总体统计数据（使用过滤后的总数）
             const totalDatasets = [
                 {
                     label: '总元素数',
-                    data: dataSources.map(ds => ds.statistics.totalElements || 0),
+                    data: dataSources.map(ds => {
+                        // 计算过滤后的总数
+                        return displayNodeTypes.reduce((sum, type) => sum + (ds.statistics.nodeStats[type] || 0), 0);
+                    }),
                     borderColor: '#3498db',
                     backgroundColor: '#3498db33',
                     tension: 0.4,
@@ -1209,7 +1234,10 @@
                 },
                 {
                     label: '总关系数',
-                    data: dataSources.map(ds => ds.statistics.totalRelationships || 0),
+                    data: dataSources.map(ds => {
+                        // 计算过滤后的总数
+                        return displayRelationshipTypes.reduce((sum, type) => sum + (ds.statistics.relationshipStats[type] || 0), 0);
+                    }),
                     borderColor: '#e74c3c',
                     backgroundColor: '#e74c3c33',
                     tension: 0.4,
