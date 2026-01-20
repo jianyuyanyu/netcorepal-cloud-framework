@@ -207,14 +207,6 @@ public class Program
         {
             IsRequired = false
         };
-        
-        var snapshotDirOption = new Option<string>(
-            name: "--snapshot-dir",
-            description: "Snapshot directory for history mode (default: ./Snapshots)")
-        {
-            IsRequired = false
-        };
-        snapshotDirOption.SetDefaultValue("Snapshots");
 
         generateCommand.AddOption(solutionOption);
         generateCommand.AddOption(projectOption);
@@ -223,14 +215,13 @@ public class Program
         generateCommand.AddOption(verboseOption);
         generateCommand.AddOption(includeTestsOption);
         generateCommand.AddOption(noHistoryOption);
-        generateCommand.AddOption(snapshotDirOption);
         
 
         generateCommand.SetHandler(
-            async (solution, projects, output, title, verbose, includeTests, noHistory, snapshotDir) =>
+            async (solution, projects, output, title, verbose, includeTests, noHistory) =>
             {
-                await GenerateVisualization(solution, projects, output, title, verbose, includeTests, !noHistory, snapshotDir);
-            }, solutionOption, projectOption, outputOption, titleOption, verboseOption, includeTestsOption, noHistoryOption, snapshotDirOption);
+                await GenerateVisualization(solution, projects, output, title, verbose, includeTests, !noHistory);
+            }, solutionOption, projectOption, outputOption, titleOption, verboseOption, includeTestsOption, noHistoryOption);
 
         rootCommand.AddCommand(generateCommand);
         
@@ -242,7 +233,7 @@ public class Program
     }
 
     private static async Task GenerateVisualization(FileInfo? solutionFile, FileInfo[]? projectFiles,
-        FileInfo outputFile, string title, bool verbose, bool includeTests, bool withHistory, string snapshotDir)
+        FileInfo outputFile, string title, bool verbose, bool includeTests, bool withHistory)
     {
         try
         {
@@ -253,18 +244,11 @@ public class Program
                 Console.WriteLine($"Title: {title}");
                 Console.WriteLine($"Include tests: {includeTests}");
                 Console.WriteLine($"History mode: {withHistory}");
-                Console.WriteLine();
-            }
-
-            // Load snapshots if history is enabled
-            System.Collections.Generic.List<Snapshots.CodeFlowAnalysisSnapshot>? snapshots = null;
-            if (withHistory)
-            {
-                snapshots = LoadAllSnapshotFiles(snapshotDir);
-                if (snapshots.Count > 0 && verbose)
+                if (withHistory)
                 {
-                    Console.WriteLine($"Loaded {snapshots.Count} snapshot(s) from: {snapshotDir}");
+                    Console.WriteLine($"Snapshots will be discovered from project assemblies via reflection");
                 }
+                Console.WriteLine();
             }
 
             // Determine projects to analyze
@@ -402,8 +386,7 @@ public class Program
                 allProjects.ToList(), 
                 absoluteOutputPath, 
                 title,
-                withHistory,
-                snapshotDir);
+                withHistory);
 
             if (verbose)
             {
