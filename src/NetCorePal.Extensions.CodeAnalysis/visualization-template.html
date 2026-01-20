@@ -466,6 +466,14 @@
             
             <h1>{{TITLE}}</h1>
             
+            <!-- 快照选择器 -->
+            <div class="nav-group" id="snapshotSelectorGroup" style="display: none;">
+                <h3>快照版本</h3>
+                <select id="snapshotSelector" class="snapshot-selector" onchange="switchSnapshot(this.value)">
+                    <!-- 动态生成快照选项 -->
+                </select>
+            </div>
+            
             <!-- 搜索框 -->
             <div class="search-container">
                 <input type="text" id="searchBox" class="search-box" placeholder="搜索图表或元素..." oninput="performSearch()">
@@ -623,33 +631,103 @@
             }
         });
 
-        // 快照数据（包含元数据、分析结果和统计信息）
-        const snapshots = {{SNAPSHOTS}};
-        
-        // 使用最新快照（第一个）的数据
-        const currentSnapshot = snapshots[0];
-        const statistics = currentSnapshot.statistics;
-        const analysisResult = currentSnapshot.analysisResult;
+        // 数据源数组 - 每个元素包含一个快照的完整数据
+        const dataSources = {{DATA_SOURCES}};
         
         // 图表配置
         const diagramConfigs = {{DIAGRAM_CONFIGS}};
         
-        // Mermaid图表数据
-        const diagrams = {{DIAGRAMS}};
-
-        // 单独的链路流程图数据
-        const allChainFlowCharts = {{ALL_CHAIN_FLOW_CHARTS}};
-
-        // 所有聚合关系图数据
-        const allAggregateRelationDiagrams = {{ALL_AGGREGATE_RELATION_DIAGRAMS}};
+        // 当前选中的数据源索引
+        let currentDataSourceIndex = 0;
+        
+        // 当前数据源
+        let currentDataSource = dataSources[currentDataSourceIndex];
+        let statistics = currentDataSource.statistics;
+        let analysisResult = currentDataSource.analysisResult;
+        let diagrams = currentDataSource.diagrams;
+        let allChainFlowCharts = currentDataSource.allChainFlowCharts;
+        let allAggregateRelationDiagrams = currentDataSource.allAggregateRelationDiagrams;
 
         let currentDiagram = null;
         let currentDiagramData = null;
         let processingFlowExpanded = false;
         let aggregateDiagramsExpanded = false;
+        
+        // 切换快照/数据源
+        function switchSnapshot(index) {
+            const selectedIndex = parseInt(index);
+            if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= dataSources.length) {
+                return;
+            }
+            
+            currentDataSourceIndex = selectedIndex;
+            currentDataSource = dataSources[currentDataSourceIndex];
+            
+            // 更新全局变量
+            statistics = currentDataSource.statistics;
+            analysisResult = currentDataSource.analysisResult;
+            diagrams = currentDataSource.diagrams;
+            allChainFlowCharts = currentDataSource.allChainFlowCharts;
+            allAggregateRelationDiagrams = currentDataSource.allAggregateRelationDiagrams;
+            
+            // 重新生成导航
+            generateAggregateDiagramNavigation();
+            generateChainNavigation();
+            addNavigationListeners();
+            
+            // 刷新当前显示的图表
+            if (currentDiagram) {
+                if (currentDiagram.startsWith('processing-flow-')) {
+                    const chainIndex = parseInt(currentDiagram.replace('processing-flow-', ''));
+                    if (!isNaN(chainIndex) && chainIndex < allChainFlowCharts.length) {
+                        showRequestChain(chainIndex, false);
+                    } else {
+                        showDiagram('Statistics', false);
+                    }
+                } else if (currentDiagram.startsWith('aggregate-diagram-')) {
+                    const aggIndex = parseInt(currentDiagram.replace('aggregate-diagram-', ''));
+                    if (!isNaN(aggIndex) && aggIndex < allAggregateRelationDiagrams.length) {
+                        showAggregateDiagram(aggIndex, false);
+                    } else {
+                        showDiagram('Statistics', false);
+                    }
+                } else {
+                    showDiagram(currentDiagram, false);
+                }
+            }
+        }
 
+        // 初始化快照选择器
+        function initializeSnapshotSelector() {
+            if (dataSources.length > 1) {
+                const selectorGroup = document.getElementById('snapshotSelectorGroup');
+                const selector = document.getElementById('snapshotSelector');
+                
+                if (selectorGroup && selector) {
+                    selectorGroup.style.display = 'block';
+                    
+                    // 生成选项
+                    selector.innerHTML = '';
+                    dataSources.forEach((ds, index) => {
+                        const option = document.createElement('option');
+                        option.value = index;
+                        const metadata = ds.metadata;
+                        const label = metadata.description ? 
+                            `${metadata.description} (${metadata.timestamp})` :
+                            `版本 ${metadata.version} (${metadata.timestamp})`;
+                        option.textContent = label;
+                        if (index === 0) {
+                            option.selected = true;
+                        }
+                        selector.appendChild(option);
+                    });
+                }
+            }
+        }
+        
         // 初始化页面
         function initializePage() {
+            initializeSnapshotSelector();
             generateAggregateDiagramNavigation();
             generateChainNavigation();
             addNavigationListeners();

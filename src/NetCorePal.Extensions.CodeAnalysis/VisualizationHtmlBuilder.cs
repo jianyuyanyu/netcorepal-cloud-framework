@@ -45,14 +45,6 @@ namespace NetCorePal.Extensions.CodeAnalysis
                 resultToVisualize = analysisResult;
             }
 
-            // 使用确定的结果生成Mermaid图表
-            var architectureOverviewMermaid =
-                MermaidVisualizers.ArchitectureOverviewMermaidVisualizer.GenerateMermaid(resultToVisualize);
-            var allProcessingFlowMermaid =
-                MermaidVisualizers.ProcessingFlowMermaidVisualizer.GenerateMermaid(resultToVisualize);
-            var allAggregateMermaid =
-                MermaidVisualizers.AggregateRelationMermaidVisualizer.GenerateAllAggregateMermaid(resultToVisualize);
-
             // 读取嵌入资源模板内容
             var assembly = typeof(VisualizationHtmlBuilder).Assembly;
             var resourceName = assembly.GetManifestResourceNames()
@@ -77,29 +69,23 @@ namespace NetCorePal.Extensions.CodeAnalysis
                 }
             }
 
-            // 构建快照集合的JSON
-            var snapshotsJson = BuildSnapshotsJson(snapshotList);
+            // 构建 dataSources 数组 - 每个snapshot生成完整的数据源
+            var dataSourcesJson = BuildDataSourcesJson(snapshotList);
             var diagramConfigsJson = BuildDiagramConfigsJson();
-            var diagramsJson = BuildArchitectureOverviewMermaidJson(architectureOverviewMermaid);
-            var allChainFlowChartsJson = BuildProcessingFlowMermaidJson(allProcessingFlowMermaid);
-            var allAggregateRelationDiagramsJson = BuildAllAggregateRelationDiagramsJson(allAggregateMermaid);
 
             // 替换模板中的占位符
             var html = template
                 .Replace("{{TITLE}}", EscapeHtml(title))
                 .Replace("{{MAX_EDGES}}", maxEdges.ToString())
                 .Replace("{{MAX_TEXT_SIZE}}", maxTextSize.ToString())
-                .Replace("{{SNAPSHOTS}}", snapshotsJson)
-                .Replace("{{DIAGRAM_CONFIGS}}", diagramConfigsJson)
-                .Replace("{{DIAGRAMS}}", diagramsJson)
-                .Replace("{{ALL_CHAIN_FLOW_CHARTS}}", allChainFlowChartsJson)
-                .Replace("{{ALL_AGGREGATE_RELATION_DIAGRAMS}}", allAggregateRelationDiagramsJson);
+                .Replace("{{DATA_SOURCES}}", dataSourcesJson)
+                .Replace("{{DIAGRAM_CONFIGS}}", diagramConfigsJson);
 
             return html;
         }
 
-        // 构建快照集合的JSON字符串
-        private static string BuildSnapshotsJson(System.Collections.Generic.List<Snapshots.CodeFlowAnalysisSnapshot> snapshots)
+        // 构建 dataSources 数组的JSON字符串 - 包含每个snapshot的完整数据
+        private static string BuildDataSourcesJson(System.Collections.Generic.List<Snapshots.CodeFlowAnalysisSnapshot> snapshots)
         {
             var sb = new StringBuilder();
             sb.Append("[");
@@ -107,6 +93,16 @@ namespace NetCorePal.Extensions.CodeAnalysis
             for (int i = 0; i < snapshots.Count; i++)
             {
                 var snapshot = snapshots[i];
+                var analysisResult = snapshot.GetAnalysisResult();
+                
+                // 生成该快照的Mermaid图表
+                var architectureOverviewMermaid =
+                    MermaidVisualizers.ArchitectureOverviewMermaidVisualizer.GenerateMermaid(analysisResult);
+                var allProcessingFlowMermaid =
+                    MermaidVisualizers.ProcessingFlowMermaidVisualizer.GenerateMermaid(analysisResult);
+                var allAggregateMermaid =
+                    MermaidVisualizers.AggregateRelationMermaidVisualizer.GenerateAllAggregateMermaid(analysisResult);
+                
                 sb.Append("{");
                 
                 // 元数据
@@ -121,11 +117,27 @@ namespace NetCorePal.Extensions.CodeAnalysis
                 
                 // 分析结果
                 sb.Append("\"analysisResult\":");
-                sb.Append(BuildAnalysisResultJson(snapshot.GetAnalysisResult()));
+                sb.Append(BuildAnalysisResultJson(analysisResult));
+                sb.Append(",");
                 
                 // 统计信息
-                sb.Append(",\"statistics\":");
-                sb.Append(BuildStatisticsJson(snapshot.GetAnalysisResult()));
+                sb.Append("\"statistics\":");
+                sb.Append(BuildStatisticsJson(analysisResult));
+                sb.Append(",");
+                
+                // 图表数据
+                sb.Append("\"diagrams\":");
+                sb.Append(BuildArchitectureOverviewMermaidJson(architectureOverviewMermaid));
+                sb.Append(",");
+                
+                // 处理流程图
+                sb.Append("\"allChainFlowCharts\":");
+                sb.Append(BuildProcessingFlowMermaidJson(allProcessingFlowMermaid));
+                sb.Append(",");
+                
+                // 聚合关系图
+                sb.Append("\"allAggregateRelationDiagrams\":");
+                sb.Append(BuildAllAggregateRelationDiagramsJson(allAggregateMermaid));
                 
                 sb.Append("}");
                 
