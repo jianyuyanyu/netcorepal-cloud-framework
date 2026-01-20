@@ -155,6 +155,38 @@
             color: white;
         }
 
+        /* 快照选择器样式 */
+        .snapshot-selector {
+            width: 100%;
+            padding: 12px 15px;
+            background-color: #34495e;
+            color: #ecf0f1;
+            border: 1px solid #4a5f7f;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            outline: none;
+            margin-top: 10px;
+        }
+
+        .snapshot-selector:hover {
+            background-color: #3d566e;
+            border-color: #5a7fa0;
+        }
+
+        .snapshot-selector:focus {
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+
+        .snapshot-selector option {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+        }
+
         .content-header {
             margin-bottom: 12px;
             padding-bottom: 8px;
@@ -675,29 +707,8 @@
             generateChainNavigation();
             addNavigationListeners();
             
-            // 刷新当前显示的图表
-            if (currentDiagram) {
-                if (currentDiagram.startsWith('processing-flow-')) {
-                    const chainIndex = parseInt(currentDiagram.replace('processing-flow-', ''));
-                    if (!isNaN(chainIndex) && chainIndex < allChainFlowCharts.length) {
-                        showRequestChain(chainIndex, false);
-                    } else {
-                        showDiagram('Statistics', false);
-                    }
-                } else if (currentDiagram.startsWith('aggregate-diagram-')) {
-                    const aggIndex = parseInt(currentDiagram.replace('aggregate-diagram-', ''));
-                    if (!isNaN(aggIndex) && aggIndex < allAggregateRelationDiagrams.length) {
-                        showAggregateDiagram(aggIndex, false);
-                    } else {
-                        showDiagram('Statistics', false);
-                    }
-                } else {
-                    showDiagram(currentDiagram, false);
-                }
-            } else {
-                // 如果没有当前图表，默认显示统计信息
-                showDiagram('Statistics', false);
-            }
+            // 切换快照后，始终显示统计信息页面
+            showDiagram('Statistics', false);
         }
 
         // 初始化快照选择器
