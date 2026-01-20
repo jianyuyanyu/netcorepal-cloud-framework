@@ -224,6 +224,7 @@ namespace NetCorePal.Extensions.CodeAnalysis
         {
             return "{" +
                    "\"Statistics\":{\"title\":'统计信息',\"description\":'展示各个要素的统计信息'}," +
+                   "\"HistoricalTrends\":{\"title\":'历史趋势',\"description\":'展示各个要素的历史变化趋势'}," +
                    "\"ArchitectureOverview\":{\"title\":'架构大图',\"description\":'展示系统中所有类型及其关系的完整视图'}," +
                    "\"command\":{\"title\":'命令关系图',\"description\":'展示命令在系统中的完整流转与关系'}" +
                    "}";

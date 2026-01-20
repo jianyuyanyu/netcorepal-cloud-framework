@@ -6,6 +6,7 @@
     <title>{{TITLE}}</title>
     <script src="https://unpkg.com/mermaid@11.9.0/dist/mermaid.min.js"></script>
     <script src="https://unpkg.com/pako@2.1.0/dist/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         :root {
             --sidebar-width: 280px;
@@ -517,6 +518,9 @@
                 <a class="nav-item" data-diagram="Statistics" href="#Statistics" title="📊 统计信息">
                     📊 统计信息
                 </a>
+                <a class="nav-item" data-diagram="HistoricalTrends" href="#HistoricalTrends" title="📈 历史趋势" style="display: none;" id="historicalTrendsMenuItem">
+                    📈 历史趋势
+                </a>
                 <a class="nav-item" data-diagram="ArchitectureOverview" href="#ArchitectureOverview" title="🏛️ 总览图">
                     🏛️ 总览图
                 </a>
@@ -713,6 +717,16 @@
 
         // 初始化快照选择器
         function initializeSnapshotSelector() {
+            // 显示/隐藏历史趋势菜单项 - 需要至少2个快照
+            const historicalTrendsMenuItem = document.getElementById('historicalTrendsMenuItem');
+            if (historicalTrendsMenuItem) {
+                if (dataSources.length >= 2) {
+                    historicalTrendsMenuItem.style.display = 'block';
+                } else {
+                    historicalTrendsMenuItem.style.display = 'none';
+                }
+            }
+            
             if (dataSources.length > 1) {
                 const selectorGroup = document.getElementById('snapshotSelectorGroup');
                 const selector = document.getElementById('snapshotSelector');
@@ -848,6 +862,12 @@
             // 特殊处理统计信息页面
             if (diagramType === 'Statistics') {
                 showStatistics(contentDiv);
+                return;
+            }
+            
+            // 特殊处理历史趋势页面
+            if (diagramType === 'HistoricalTrends') {
+                showHistoricalTrends(contentDiv);
                 return;
             }
             
@@ -1118,6 +1138,256 @@
             html += '</div></div>';
             
             container.innerHTML = html;
+        }
+
+        // 显示历史趋势图表
+        function showHistoricalTrends(container) {
+            // 如果只有一个快照，不显示历史趋势
+            if (dataSources.length < 2) {
+                container.innerHTML = '<div style="padding: 60px; text-align: center; color: #7f8c8d;"><h3>历史趋势</h3><p>需要至少2个历史快照才能展示趋势变化</p></div>';
+                return;
+            }
+            
+            // 准备图表数据
+            const labels = dataSources.map(ds => {
+                const meta = ds.metadata;
+                return meta.description || `版本 ${meta.version}`;
+            });
+            
+            // 提取节点类型统计数据
+            const nodeTypes = ['Aggregate', 'Command', 'DomainEvent', 'CommandHandler', 'DomainEventHandler', 
+                              'IntegrationEventHandler', 'ControllerMethod', 'CommandSender', 'Endpoint'];
+            
+            const nodeDatasets = nodeTypes.map((type, index) => {
+                const colors = [
+                    '#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
+                    '#1abc9c', '#e67e22', '#34495e', '#16a085'
+                ];
+                
+                return {
+                    label: type,
+                    data: dataSources.map(ds => ds.statistics.nodeStats[type] || 0),
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length] + '33',
+                    tension: 0.4,
+                    fill: false,
+                    hidden: false
+                };
+            });
+            
+            // 提取关系类型统计数据
+            const relationshipTypes = ['CommandHandlerToAggregate', 'CommandToHandler', 'AggregateToEntity', 
+                                      'EntityMethodToDomainEvent', 'DomainEventToHandler', 'CommandHandlerToCommandSender',
+                                      'ControllerToCommand', 'EndpointToCommand'];
+            
+            const relationshipDatasets = relationshipTypes.map((type, index) => {
+                const colors = [
+                    '#8e44ad', '#c0392b', '#27ae60', '#d35400', '#2980b9',
+                    '#16a085', '#f39c12', '#7f8c8d'
+                ];
+                
+                return {
+                    label: type,
+                    data: dataSources.map(ds => ds.statistics.relationshipStats[type] || 0),
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: colors[index % colors.length] + '33',
+                    tension: 0.4,
+                    fill: false,
+                    hidden: false
+                };
+            });
+            
+            // 总体统计数据
+            const totalDatasets = [
+                {
+                    label: '总元素数',
+                    data: dataSources.map(ds => ds.statistics.totalElements || 0),
+                    borderColor: '#3498db',
+                    backgroundColor: '#3498db33',
+                    tension: 0.4,
+                    fill: false
+                },
+                {
+                    label: '总关系数',
+                    data: dataSources.map(ds => ds.statistics.totalRelationships || 0),
+                    borderColor: '#e74c3c',
+                    backgroundColor: '#e74c3c33',
+                    tension: 0.4,
+                    fill: false
+                }
+            ];
+            
+            // 创建HTML容器
+            let html = '<div style="padding: 20px; height: calc(100vh - 140px); overflow-y: auto;">';
+            
+            // 总体趋势图
+            html += '<div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px;">';
+            html += '<h2 style="margin: 0 0 15px 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; font-size: 18px;">📊 总体趋势</h2>';
+            html += '<canvas id="totalTrendsChart" style="max-height: 300px;"></canvas>';
+            html += '</div>';
+            
+            // 元素类型趋势图
+            html += '<div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px;">';
+            html += '<h2 style="margin: 0 0 15px 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; font-size: 18px;">📈 元素类型趋势</h2>';
+            html += '<canvas id="nodeTrendsChart" style="max-height: 400px;"></canvas>';
+            html += '</div>';
+            
+            // 关系类型趋势图
+            html += '<div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px;">';
+            html += '<h2 style="margin: 0 0 15px 0; color: #2c3e50; border-bottom: 2px solid #e74c3c; padding-bottom: 8px; font-size: 18px;">🔗 关系类型趋势</h2>';
+            html += '<canvas id="relationshipTrendsChart" style="max-height: 400px;"></canvas>';
+            html += '</div>';
+            
+            html += '</div>';
+            
+            container.innerHTML = html;
+            
+            // 延迟渲染图表以确保DOM已更新
+            setTimeout(() => {
+                // 渲染总体趋势图
+                const totalCtx = document.getElementById('totalTrendsChart');
+                if (totalCtx) {
+                    new Chart(totalCtx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: totalDatasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            plugins: {
+                                legend: {
+                                    display: true,
+                                    position: 'top',
+                                    onClick: function(e, legendItem, legend) {
+                                        const index = legendItem.datasetIndex;
+                                        const chart = legend.chart;
+                                        const meta = chart.getDatasetMeta(index);
+                                        meta.hidden = !meta.hidden;
+                                        chart.update();
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return context.dataset.label + ': ' + context.parsed.y;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        precision: 0
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                // 渲染元素类型趋势图
+                const nodeCtx = document.getElementById('nodeTrendsChart');
+                if (nodeCtx) {
+                    new Chart(nodeCtx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: nodeDatasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            plugins: {
+                                legend: {
+                                    display: true,
+                                    position: 'top',
+                                    onClick: function(e, legendItem, legend) {
+                                        const index = legendItem.datasetIndex;
+                                        const chart = legend.chart;
+                                        const meta = chart.getDatasetMeta(index);
+                                        meta.hidden = !meta.hidden;
+                                        chart.update();
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return context.dataset.label + ': ' + context.parsed.y;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        precision: 0
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                // 渲染关系类型趋势图
+                const relationshipCtx = document.getElementById('relationshipTrendsChart');
+                if (relationshipCtx) {
+                    new Chart(relationshipCtx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: relationshipDatasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            plugins: {
+                                legend: {
+                                    display: true,
+                                    position: 'top',
+                                    onClick: function(e, legendItem, legend) {
+                                        const index = legendItem.datasetIndex;
+                                        const chart = legend.chart;
+                                        const meta = chart.getDatasetMeta(index);
+                                        meta.hidden = !meta.hidden;
+                                        chart.update();
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return context.dataset.label + ': ' + context.parsed.y;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        precision: 0
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            }, 100);
         }
 
         // 切换单独链路展开/收起
