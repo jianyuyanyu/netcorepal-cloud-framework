@@ -875,8 +875,23 @@ public class Program
             // Generate version number
             var version = DateTime.Now.ToString("yyyyMMddHHmmss");
             
+            // Determine absolute snapshot directory
+            // If snapshotDir is relative, resolve it relative to the first project's directory
+            string absoluteSnapshotDir;
+            if (Path.IsPathRooted(snapshotDir))
+            {
+                // Absolute path provided
+                absoluteSnapshotDir = snapshotDir;
+            }
+            else
+            {
+                // Relative path - resolve relative to first project's directory
+                var firstProject = projectsToAnalyze.First();
+                var projectDir = Path.GetDirectoryName(firstProject) ?? Directory.GetCurrentDirectory();
+                absoluteSnapshotDir = Path.GetFullPath(Path.Combine(projectDir, snapshotDir));
+            }
+            
             // Ensure snapshot directory exists
-            var absoluteSnapshotDir = Path.GetFullPath(snapshotDir);
             if (!Directory.Exists(absoluteSnapshotDir))
             {
                 Directory.CreateDirectory(absoluteSnapshotDir);

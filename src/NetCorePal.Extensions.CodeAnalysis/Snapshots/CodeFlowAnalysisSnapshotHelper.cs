@@ -167,40 +167,40 @@ public static class CodeFlowAnalysisSnapshotHelper
         return attr switch
         {
             Attributes.EntityMetadataAttribute entity => 
-                $"new EntityMetadataAttribute({EscapeCSharpString(entity.EntityType)}, {entity.IsAggregateRoot.ToString().ToLower()}, {SerializeStringArray(entity.SubEntities)}, {SerializeStringArray(entity.MethodNames)})",
+                $"new EntityMetadataAttribute(\"{EscapeCSharpString(entity.EntityType)}\", {entity.IsAggregateRoot.ToString().ToLower()}, {SerializeStringArray(entity.SubEntities)}, {SerializeStringArray(entity.MethodNames)})",
             
             Attributes.EntityMethodMetadataAttribute method => 
-                $"new EntityMethodMetadataAttribute({EscapeCSharpString(method.EntityType)}, {EscapeCSharpString(method.MethodName)}, {SerializeStringArray(method.EventTypes)}, {SerializeStringArray(method.CalledEntityMethods)})",
+                $"new EntityMethodMetadataAttribute(\"{EscapeCSharpString(method.EntityType)}\", \"{EscapeCSharpString(method.MethodName)}\", {SerializeStringArray(method.EventTypes)}, {SerializeStringArray(method.CalledEntityMethods)})",
             
             Attributes.DomainEventMetadataAttribute domainEvent => 
-                $"new DomainEventMetadataAttribute({EscapeCSharpString(domainEvent.EventType)})",
+                $"new DomainEventMetadataAttribute(\"{EscapeCSharpString(domainEvent.EventType)}\")",
             
             Attributes.CommandMetadataAttribute command => 
-                $"new CommandMetadataAttribute({EscapeCSharpString(command.CommandType)})",
+                $"new CommandMetadataAttribute(\"{EscapeCSharpString(command.CommandType)}\")",
             
             Attributes.DomainEventHandlerMetadataAttribute domainHandler => 
-                $"new DomainEventHandlerMetadataAttribute({EscapeCSharpString(domainHandler.HandlerType)}, {EscapeCSharpString(domainHandler.EventType)}, {SerializeStringArray(domainHandler.CommandTypes)})",
+                $"new DomainEventHandlerMetadataAttribute(\"{EscapeCSharpString(domainHandler.HandlerType)}\", \"{EscapeCSharpString(domainHandler.EventType)}\", {SerializeStringArray(domainHandler.CommandTypes)})",
             
             Attributes.IntegrationEventHandlerMetadataAttribute integrationHandler => 
-                $"new IntegrationEventHandlerMetadataAttribute({EscapeCSharpString(integrationHandler.HandlerType)}, {EscapeCSharpString(integrationHandler.EventType)}, {SerializeStringArray(integrationHandler.CommandTypes)})",
+                $"new IntegrationEventHandlerMetadataAttribute(\"{EscapeCSharpString(integrationHandler.HandlerType)}\", \"{EscapeCSharpString(integrationHandler.EventType)}\", {SerializeStringArray(integrationHandler.CommandTypes)})",
             
             Attributes.CommandHandlerMetadataAttribute commandHandler => 
-                $"new CommandHandlerMetadataAttribute({EscapeCSharpString(commandHandler.HandlerType)}, {EscapeCSharpString(commandHandler.CommandType)}, {SerializeStringArray(commandHandler.AggregateTypes)})",
+                $"new CommandHandlerMetadataAttribute(\"{EscapeCSharpString(commandHandler.HandlerType)}\", \"{EscapeCSharpString(commandHandler.CommandType)}\", {SerializeStringArray(commandHandler.AggregateTypes)})",
             
             Attributes.CommandHandlerEntityMethodMetadataAttribute commandHandlerMethod => 
-                $"new CommandHandlerEntityMethodMetadataAttribute({EscapeCSharpString(commandHandlerMethod.HandlerType)}, {EscapeCSharpString(commandHandlerMethod.CommandType)}, {EscapeCSharpString(commandHandlerMethod.EntityType)}, {EscapeCSharpString(commandHandlerMethod.EntityMethodName)})",
+                $"new CommandHandlerEntityMethodMetadataAttribute(\"{EscapeCSharpString(commandHandlerMethod.HandlerType)}\", \"{EscapeCSharpString(commandHandlerMethod.CommandType)}\", \"{EscapeCSharpString(commandHandlerMethod.EntityType)}\", \"{EscapeCSharpString(commandHandlerMethod.EntityMethodName)}\")",
             
             Attributes.ControllerMethodMetadataAttribute controller => 
-                $"new ControllerMethodMetadataAttribute({EscapeCSharpString(controller.ControllerType)}, {EscapeCSharpString(controller.ControllerMethodName)}, {SerializeStringArray(controller.CommandTypes)})",
+                $"new ControllerMethodMetadataAttribute(\"{EscapeCSharpString(controller.ControllerType)}\", \"{EscapeCSharpString(controller.ControllerMethodName)}\", {SerializeStringArray(controller.CommandTypes)})",
             
             Attributes.CommandSenderMethodMetadataAttribute sender => 
-                $"new CommandSenderMethodMetadataAttribute({EscapeCSharpString(sender.SenderType)}, {EscapeCSharpString(sender.SenderMethodName)}, {SerializeStringArray(sender.CommandTypes)})",
+                $"new CommandSenderMethodMetadataAttribute(\"{EscapeCSharpString(sender.SenderType)}\", \"{EscapeCSharpString(sender.SenderMethodName)}\", {SerializeStringArray(sender.CommandTypes)})",
             
             Attributes.EndpointMetadataAttribute endpoint => 
-                $"new EndpointMetadataAttribute({EscapeCSharpString(endpoint.EndpointType)}, {EscapeCSharpString(endpoint.EndpointMethodName)}, {SerializeStringArray(endpoint.CommandTypes)})",
+                $"new EndpointMetadataAttribute(\"{EscapeCSharpString(endpoint.EndpointType)}\", \"{EscapeCSharpString(endpoint.EndpointMethodName)}\", {SerializeStringArray(endpoint.CommandTypes)})",
             
             Attributes.IntegrationEventConverterMetadataAttribute converter => 
-                $"new IntegrationEventConverterMetadataAttribute({EscapeCSharpString(converter.DomainEventType)}, {EscapeCSharpString(converter.IntegrationEventType)})",
+                $"new IntegrationEventConverterMetadataAttribute(\"{EscapeCSharpString(converter.DomainEventType)}\", \"{EscapeCSharpString(converter.IntegrationEventType)}\")",
             
             _ => string.Empty
         };
