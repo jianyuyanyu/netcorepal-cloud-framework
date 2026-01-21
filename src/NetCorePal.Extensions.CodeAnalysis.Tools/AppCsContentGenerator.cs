@@ -18,9 +18,7 @@ internal static class AppCsContentGenerator
         {
             sb.AppendLine($"#:project {projectPath}");
         }
-        var nugetversion = typeof(SnapshotAppCsGenerator).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion.Split('+')[0];
+        var nugetversion = ProjectAnalysisHelpers.GetVersionWithoutGithash();
         if(!string.IsNullOrEmpty(nugetversion))
         {
             sb.AppendLine($"#:package NetCorePal.Extensions.CodeAnalysis@{nugetversion}");

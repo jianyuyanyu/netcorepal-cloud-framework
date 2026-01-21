@@ -38,9 +38,7 @@ public static class SnapshotAppCsGenerator
         }
 
         // 获取当前nuget包版本号
-        var nugetversion = typeof(SnapshotAppCsGenerator).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion.Split('+')[0];
+        var nugetversion = ProjectAnalysisHelpers.GetVersionWithoutGithash();
         if(!string.IsNullOrEmpty(nugetversion))
         {
             sb.AppendLine($"#:package NetCorePal.Extensions.CodeAnalysis@{nugetversion}");

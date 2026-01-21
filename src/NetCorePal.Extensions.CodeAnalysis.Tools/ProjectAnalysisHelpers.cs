@@ -213,6 +213,26 @@ internal static class ProjectAnalysisHelpers
     }
 
     /// <summary>
+    /// Gets the NuGet package version without the Git hash suffix
+    /// </summary>
+    /// <returns>Version string without Git hash (e.g., "1.0.0" from "1.0.0+abc123"), or null if version not available</returns>
+    internal static string? GetVersionWithoutGithash()
+    {
+        var version = typeof(ProjectAnalysisHelpers).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+        
+        if (string.IsNullOrEmpty(version))
+        {
+            return null;
+        }
+        
+        // Remove Git hash (everything after '+')
+        var parts = version.Split('+');
+        return parts.Length > 0 ? parts[0] : null;
+    }
+
+    /// <summary>
     /// Gets the target framework from a project file. Returns the first TargetFramework or TargetFrameworks value found.
     /// </summary>
     /// <param name="projectFilePath">Path to the .csproj file</param>
