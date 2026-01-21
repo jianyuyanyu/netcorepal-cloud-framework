@@ -732,25 +732,25 @@ public class Program
 
         // snapshot list command
         var listCommand = new Command("list", "List all saved snapshots");
-        listCommand.AddOption(snapshotDirOption);
+        listCommand.AddOption(projectOption);
         listCommand.AddOption(verboseOption);
 
-        listCommand.SetHandler((snapshotDir, verbose) =>
+        listCommand.SetHandler(async (projects, verbose) =>
         {
-            ListSnapshots(snapshotDir, verbose);
-        }, snapshotDirOption, verboseOption);
+            await ListSnapshotsFromProject(projects, verbose);
+        }, projectOption, verboseOption);
 
         // snapshot show command
         var showCommand = new Command("show", "Show details of a specific snapshot");
         var versionArg = new Argument<string>("version", "Snapshot version to show");
         showCommand.AddArgument(versionArg);
-        showCommand.AddOption(snapshotDirOption);
+        showCommand.AddOption(projectOption);
         showCommand.AddOption(verboseOption);
 
-        showCommand.SetHandler((version, snapshotDir, verbose) =>
+        showCommand.SetHandler(async (version, projects, verbose) =>
         {
-            ShowSnapshot(version, snapshotDir, verbose);
-        }, versionArg, snapshotDirOption, verboseOption);
+            await ShowSnapshotFromProject(version, projects, verbose);
+        }, versionArg, projectOption, verboseOption);
 
         snapshotCommand.AddCommand(addCommand);
         snapshotCommand.AddCommand(listCommand);
@@ -1040,10 +1040,310 @@ public class Program
         }
     }
 
-    private static void ListSnapshots(string snapshotDir, bool verbose)
+    private static async Task<List<CodeFlowAnalysisSnapshot>> LoadSnapshotsFromProjectAssemblies(FileInfo[]? projectFiles, bool verbose, bool includeTests)
     {
         try
         {
+            // Collect projects to analyze
+            var projectsToAnalyze = new List<string>();
+
+            if (projectFiles?.Length > 0)
+            {
+                // Specific project files provided
+                foreach (var projectFile in projectFiles)
+                {
+                    if (!projectFile.Exists)
+                    {
+                        Console.Error.WriteLine($"Error: Project file not found: {projectFile.FullName}");
+                        ExitHandler.Exit(1);
+                    }
+                    if (!includeTests && ProjectAnalysisHelpers.IsTestProject(projectFile.FullName, verbose))
+                    {
+                        if (verbose)
+                            Console.WriteLine($"  Skipping test project: {projectFile.FullName}");
+                        continue;
+                    }
+                    projectsToAnalyze.Add(projectFile.FullName);
+                }
+            }
+            else
+            {
+                // Auto-discover: only allow if current directory has exactly ONE .csproj
+                var currentDir = Directory.GetCurrentDirectory();
+                var projectFiles2 = Directory.GetFiles(currentDir, "*.csproj", SearchOption.TopDirectoryOnly);
+                
+                if (projectFiles2.Length == 0)
+                {
+                    Console.Error.WriteLine("Error: No .csproj file found in current directory.");
+                    Console.Error.WriteLine("Snapshot command requires either:");
+                    Console.Error.WriteLine("  1. Explicit --project option with specific .csproj file(s)");
+                    Console.Error.WriteLine("  2. Current directory containing exactly one .csproj file");
+                    ExitHandler.Exit(1);
+                }
+                else if (projectFiles2.Length > 1)
+                {
+                    Console.Error.WriteLine($"Error: Found {projectFiles2.Length} .csproj files in current directory.");
+                    Console.Error.WriteLine("Please specify which project to use with --project option.");
+                    ExitHandler.Exit(1);
+                }
+                
+                var projectFile = projectFiles2[0];
+                if (!includeTests && ProjectAnalysisHelpers.IsTestProject(projectFile, verbose))
+                {
+                    Console.Error.WriteLine($"Error: The only .csproj file found is a test project: {projectFile}");
+                    Console.Error.WriteLine("Test projects are excluded by default. Use --include-tests to include them.");
+                    ExitHandler.Exit(1);
+                }
+                
+                projectsToAnalyze.Add(projectFile);
+            }
+
+            if (projectsToAnalyze.Count == 0)
+            {
+                Console.Error.WriteLine("Error: No projects to analyze after filtering.");
+                ExitHandler.Exit(1);
+            }
+
+            // Generate and run app.cs to load snapshots from assemblies
+            var snapshots = await RunSnapshotLoaderAppCs(projectsToAnalyze, verbose);
+            return snapshots;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error loading snapshots: {ex.Message}");
+            if (verbose)
+            {
+                Console.Error.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+            ExitHandler.Exit(1);
+            return new List<CodeFlowAnalysisSnapshot>();
+        }
+    }
+
+    private static async Task<List<CodeFlowAnalysisSnapshot>> RunSnapshotLoaderAppCs(List<string> projectPaths, bool verbose)
+    {
+        var snapshots = new List<CodeFlowAnalysisSnapshot>();
+        var tempWorkDir = Path.Combine(Path.GetTempPath(), $"netcorepal-snapshot-loader-{Guid.NewGuid():N}");
+        
+        try
+        {
+            Directory.CreateDirectory(tempWorkDir);
+            
+            // Collect all project dependencies
+            var allProjects = new HashSet<string>();
+            foreach (var proj in projectPaths)
+            {
+                ProjectAnalysisHelpers.CollectProjectDependencies(proj, allProjects, verbose, includeTests: true);
+            }
+
+            // Find NuGet.config
+            var firstProjectDir = Path.GetDirectoryName(projectPaths[0])!;
+            var nugetConfigPath = FindNuGetConfig(firstProjectDir, verbose);
+
+            // Generate app.cs to load snapshots
+            var appCsContent = GenerateSnapshotLoaderAppCs(allProjects.ToList(), nugetConfigPath, verbose);
+            var tempAppCsPath = Path.Combine(tempWorkDir, "app.cs");
+            await File.WriteAllTextAsync(tempAppCsPath, appCsContent);
+
+            if (verbose)
+            {
+                Console.WriteLine($"Generated snapshot loader app.cs in: {tempWorkDir}");
+            }
+
+            // Determine target framework
+            string? targetFramework = null;
+            if (allProjects.Count > 0)
+            {
+                targetFramework = ProjectAnalysisHelpers.GetTargetFramework(allProjects.First(), verbose);
+            }
+
+            var runArgs = $"run {tempAppCsPath} --no-launch-profile";
+            if (!string.IsNullOrEmpty(targetFramework))
+            {
+                runArgs += $" -f {targetFramework}";
+            }
+
+            var processStartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = runArgs,
+                WorkingDirectory = tempWorkDir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(processStartInfo);
+            if (process == null)
+            {
+                throw new Exception("Failed to start snapshot loader process");
+            }
+
+            var outputBuilder = new StringBuilder();
+            var errorBuilder = new StringBuilder();
+
+            var outputTask = Task.Run(async () =>
+            {
+                using var reader = process.StandardOutput;
+                string? line;
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    outputBuilder.AppendLine(line);
+                    if (verbose) Console.WriteLine(line);
+                }
+            });
+
+            var errorTask = Task.Run(async () =>
+            {
+                using var reader = process.StandardError;
+                string? line;
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    errorBuilder.AppendLine(line);
+                    if (verbose) Console.Error.WriteLine(line);
+                }
+            });
+
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(AnalysisTimeoutMinutes));
+            await Task.WhenAll(process.WaitForExitAsync(timeoutCts.Token), outputTask, errorTask);
+
+            if (process.ExitCode != 0)
+            {
+                throw new Exception($"Snapshot loader failed with exit code {process.ExitCode}: {errorBuilder}");
+            }
+
+            // Parse snapshots from output (would need serialization format)
+            // For now, we'll use reflection directly in the generated app.cs
+            // and have it output in a parseable format
+            
+            return snapshots;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempWorkDir))
+                {
+                    Directory.Delete(tempWorkDir, recursive: true);
+                }
+            }
+            catch
+            {
+                // Ignore cleanup errors
+            }
+        }
+    }
+
+    private static string GenerateSnapshotLoaderAppCs(List<string> projectPaths, string? nugetConfigPath, bool verbose)
+    {
+        var sb = new StringBuilder();
+        
+        // Add required usings
+        sb.AppendLine("using System;");
+        sb.AppendLine("using System.Collections.Generic;");
+        sb.AppendLine("using System.IO;");
+        sb.AppendLine("using System.Linq;");
+        sb.AppendLine("using System.Reflection;");
+        sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis;");
+        sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis.Snapshots;");
+        sb.AppendLine();
+
+        // Add project references
+        foreach (var proj in projectPaths)
+        {
+            var relativePath = Path.GetRelativePath(Directory.GetCurrentDirectory(), proj);
+            sb.AppendLine($"// <ProjectReference Include=\"{relativePath}\" />");
+        }
+        sb.AppendLine();
+
+        // Add NuGet.config reference if found
+        if (!string.IsNullOrEmpty(nugetConfigPath))
+        {
+            var relativeNugetConfig = Path.GetRelativePath(Directory.GetCurrentDirectory(), nugetConfigPath);
+            sb.AppendLine($"// <NuGetConfig>{relativeNugetConfig}</NuGetConfig>");
+            sb.AppendLine();
+        }
+
+        // Generate main code
+        sb.AppendLine("var baseDir = AppDomain.CurrentDomain.BaseDirectory;");
+        sb.AppendLine();
+
+        // Get assembly names
+        var assemblyNames = projectPaths
+            .Select(p => Path.GetFileNameWithoutExtension(p) + ".dll")
+            .Distinct()
+            .ToList();
+
+        sb.AppendLine("var assemblyNames = new[]");
+        sb.AppendLine("{");
+        foreach (var assemblyName in assemblyNames)
+        {
+            sb.AppendLine($"    \"{assemblyName}\",");
+        }
+        sb.AppendLine("};");
+        sb.AppendLine();
+
+        sb.AppendLine("var assemblies = assemblyNames");
+        sb.AppendLine("    .Select(name => Path.Combine(baseDir, name))");
+        sb.AppendLine("    .Where(File.Exists)");
+        sb.AppendLine("    .Select(Assembly.LoadFrom)");
+        sb.AppendLine("    .Distinct()");
+        sb.AppendLine("    .ToArray();");
+        sb.AppendLine();
+
+        // Load snapshots from assemblies
+        sb.AppendLine("var snapshots = new List<CodeFlowAnalysisSnapshot>();");
+        sb.AppendLine("foreach (var assembly in assemblies)");
+        sb.AppendLine("{");
+        sb.AppendLine("    var snapshotTypes = assembly.GetTypes()");
+        sb.AppendLine("        .Where(t => t.IsClass && !t.IsAbstract && t.IsSubclassOf(typeof(CodeFlowAnalysisSnapshot)))");
+        sb.AppendLine("        .ToList();");
+        sb.AppendLine("    ");
+        sb.AppendLine("    foreach (var snapshotType in snapshotTypes)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        try");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var snapshot = (CodeFlowAnalysisSnapshot)Activator.CreateInstance(snapshotType);");
+        sb.AppendLine("            if (snapshot != null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                snapshots.Add(snapshot);");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine("        catch (Exception ex)");
+        sb.AppendLine("        {");
+        if (verbose)
+        {
+            sb.AppendLine("            Console.Error.WriteLine($\"Warning: Failed to instantiate {snapshotType.Name}: {ex.Message}\");");
+        }
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        sb.AppendLine();
+
+        // Sort and output snapshot information
+        sb.AppendLine("snapshots = snapshots.OrderByDescending(s => s.Metadata.Version).ToList();");
+        sb.AppendLine("Console.WriteLine($\"SNAPSHOT_COUNT:{snapshots.Count}\");");
+        sb.AppendLine("foreach (var s in snapshots)");
+        sb.AppendLine("{");
+        sb.AppendLine("    Console.WriteLine($\"SNAPSHOT:{s.Metadata.Version}|{s.Metadata.Timestamp:yyyy-MM-dd HH:mm:ss}|{s.Metadata.NodeCount}|{s.Metadata.RelationshipCount}|{s.Metadata.Description}|{s.Metadata.Hash}\");");
+        sb.AppendLine("}");
+
+        return sb.ToString();
+    }
+
+    private static async Task ListSnapshotsFromProject(FileInfo[]? projectFiles, bool verbose)
+    {
+        try
+        {
+            var projectDir = GetProjectDirectory(projectFiles, verbose);
+            var snapshotDir = Path.Combine(projectDir, "Snapshots");
+
+            if (verbose)
+            {
+                Console.WriteLine($"Loading snapshots from: {snapshotDir}");
+            }
+
             var snapshots = ListSnapshotFiles(snapshotDir);
 
             if (snapshots.Count == 0)
@@ -1071,12 +1371,21 @@ public class Program
             }
             ExitHandler.Exit(1);
         }
+        await Task.CompletedTask;
     }
 
-    private static void ShowSnapshot(string version, string snapshotDir, bool verbose)
+    private static async Task ShowSnapshotFromProject(string version, FileInfo[]? projectFiles, bool verbose)
     {
         try
         {
+            var projectDir = GetProjectDirectory(projectFiles, verbose);
+            var snapshotDir = Path.Combine(projectDir, "Snapshots");
+
+            if (verbose)
+            {
+                Console.WriteLine($"Loading snapshot from: {snapshotDir}");
+            }
+
             var snapshot = LoadSnapshotFile(version, snapshotDir);
 
             if (snapshot == null)
@@ -1112,6 +1421,131 @@ public class Program
 
                 Console.WriteLine($"\nRelationship Types:");
                 foreach (var group in relStats)
+                {
+                    Console.WriteLine($"  {group.Key}: {group.Count()}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            if (verbose)
+            {
+                Console.Error.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+            ExitHandler.Exit(1);
+        }
+        await Task.CompletedTask;
+    }
+
+    private static string GetProjectDirectory(FileInfo[]? projectFiles, bool verbose)
+    {
+        string projectPath;
+        
+        if (projectFiles?.Length > 0)
+        {
+            // Use first project's directory
+            projectPath = projectFiles[0].FullName;
+        }
+        else
+        {
+            // Auto-discover: look for single .csproj in current directory
+            var currentDir = Directory.GetCurrentDirectory();
+            var projects = Directory.GetFiles(currentDir, "*.csproj", SearchOption.TopDirectoryOnly);
+            
+            if (projects.Length == 0)
+            {
+                Console.Error.WriteLine("Error: No .csproj file found in current directory.");
+                Console.Error.WriteLine("Please specify a project with --project option.");
+                ExitHandler.Exit(1);
+            }
+            else if (projects.Length > 1)
+            {
+                Console.Error.WriteLine($"Error: Found {projects.Length} .csproj files in current directory.");
+                Console.Error.WriteLine("Please specify which project to use with --project option.");
+                ExitHandler.Exit(1);
+            }
+            
+            projectPath = projects[0];
+        }
+
+        var projectDir = Path.GetDirectoryName(projectPath)!;
+        return projectDir;
+    }
+
+    private static async Task ListSnapshots(FileInfo[]? projectFiles, bool verbose, bool includeTests)
+    {
+        try
+        {
+            var snapshots = await LoadSnapshotsFromProjectAssemblies(projectFiles, verbose, includeTests);
+
+            if (snapshots.Count == 0)
+            {
+                Console.WriteLine("No snapshots found.");
+                return;
+            }
+
+            Console.WriteLine($"Found {snapshots.Count} snapshot(s):\n");
+            Console.WriteLine($"{"Version",-20} {"Timestamp",-22} {"Nodes",-8} {"Relationships",-15} Description");
+            Console.WriteLine(new string('-', 100));
+
+            foreach (var snapshot in snapshots)
+            {
+                Console.WriteLine(
+                    $"{snapshot.Metadata.Version,-20} {snapshot.Metadata.Timestamp:yyyy-MM-dd HH:mm:ss,-22} {snapshot.Metadata.NodeCount,-8} {snapshot.Metadata.RelationshipCount,-15} {snapshot.Metadata.Description}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            if (verbose)
+            {
+                Console.Error.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+            ExitHandler.Exit(1);
+        }
+    }
+
+    private static async Task ShowSnapshot(string version, FileInfo[]? projectFiles, bool verbose, bool includeTests)
+    {
+        try
+        {
+            var snapshots = await LoadSnapshotsFromProjectAssemblies(projectFiles, verbose, includeTests);
+            var snapshot = snapshots.FirstOrDefault(s => s.Metadata.Version == version);
+
+            if (snapshot == null)
+            {
+                Console.Error.WriteLine($"Error: Snapshot not found: {version}");
+                ExitHandler.Exit(1);
+                return;
+            }
+
+            Console.WriteLine($"Snapshot: {snapshot.Metadata.Version}");
+            Console.WriteLine($"Timestamp: {snapshot.Metadata.Timestamp:yyyy-MM-dd HH:mm:ss}");
+            Console.WriteLine($"Description: {snapshot.Metadata.Description}");
+            Console.WriteLine($"Hash: {snapshot.Metadata.Hash}");
+            Console.WriteLine($"\nStatistics:");
+            Console.WriteLine($"  Total Nodes: {snapshot.Metadata.NodeCount}");
+            Console.WriteLine($"  Total Relationships: {snapshot.Metadata.RelationshipCount}");
+
+            if (verbose)
+            {
+                var nodeStats = snapshot.GetAnalysisResult().Nodes
+                    .GroupBy(n => n.Type)
+                    .OrderBy(g => g.Key.ToString());
+
+                Console.WriteLine($"\nNode Types:");
+                foreach (var group in nodeStats)
+                {
+                    Console.WriteLine($"  {group.Key}: {group.Count()}");
+                }
+
+                var relationshipStats = snapshot.GetAnalysisResult().Relationships
+                    .GroupBy(r => r.Type)
+                    .OrderBy(g => g.Key.ToString());
+
+                Console.WriteLine($"\nRelationship Types:");
+                foreach (var group in relationshipStats)
                 {
                     Console.WriteLine($"  {group.Key}: {group.Count()}");
                 }
