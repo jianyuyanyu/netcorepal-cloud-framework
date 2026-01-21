@@ -108,14 +108,31 @@ netcorepal-codeanalysis generate --include-tests
 ### 创建快照
 
 ```bash
-# 创建当前项目的架构快照（生成 .cs 文件）
+# 在当前目录创建项目架构快照（自动发现项目）
 netcorepal-codeanalysis snapshot add --description "初始版本"
 
-# 快照将保存为 Snapshots/Snapshot_20260116120000.cs
+# 快照将保存为 Snapshots/Snapshot_20260116120000_InitialVersion.cs
 
-# 创建快照并指定存储目录
-netcorepal-codeanalysis snapshot add --description "添加订单模块" --snapshot-dir ./MySnapshots
+# 指定项目文件创建快照
+netcorepal-codeanalysis snapshot add --project MyProject.csproj --description "添加订单模块"
+
+# 快照将保存为 Snapshots/Snapshot_20260116120000_AddedOrderModule.cs
+
+# 指定快照名称（可选，EF Core 风格）
+netcorepal-codeanalysis snapshot add --project MyProject.csproj --name "AddedPaymentFeature" --description "添加支付功能"
+
+# 快照将保存为 Snapshots/Snapshot_20260116120000_AddedPaymentFeature.cs
+
+# 指定快照目录
+netcorepal-codeanalysis snapshot add --project MyProject.csproj --snapshot-dir ./MySnapshots --description "重构"
 ```
+
+**重要变更**：
+- ✅ 快照文件名遵循 EF Core 迁移命名约定：`Snapshot_{Version}_{Name}.cs`
+- ✅ 快照始终保存在项目目录中（相对路径相对于项目目录解析）
+- ✅ 生成的类名始终有效（以 `Snapshot_` 前缀开头，避免数字开头）
+- ✅ 所有 MetadataAttribute 参数和数组元素正确引用
+- ✅ `snapshot add` 命令仅支持项目文件（不支持解决方案文件）
 
 快照文件示例（Snapshot_20260116120000.cs）：
 ```csharp
@@ -164,23 +181,49 @@ netcorepal-codeanalysis snapshot show 20260116120000 --verbose
 ### 生成带历史记录的HTML
 
 ```bash
-# 默认生成包含历史快照的交互式HTML（如果存在快照）
+# 默认生成包含历史快照的交互式HTML（自动通过反射发现快照）
 netcorepal-codeanalysis generate
 
-# 禁用历史记录功能
+# 生成的HTML包含：
+# - 当前版本的完整架构分析
+# - 所有历史快照（如果存在）
+# - 版本选择器下拉框（多个快照时显示）
+# - 历史趋势图表（2个或更多快照时显示）
+# - 交互式图例和响应式图表
+
+# 禁用历史记录功能（不包含历史快照）
 netcorepal-codeanalysis generate --no-history
 
-# 指定快照目录
-netcorepal-codeanalysis generate --snapshot-dir ./MySnapshots --output history.html
+# 指定输出文件
+netcorepal-codeanalysis generate --output history.html --title "架构演进历史"
 ```
 
-生成的HTML页面包含：
-- 📊 **版本选择器**：可以切换查看不同版本的架构（如果存在多个快照）
-- 📈 **趋势图表**：展示节点数量和关系数量随时间的变化趋势
-- 🔍 **版本对比**：高亮显示版本间的差异
-- 📝 **版本信息**：显示每个版本的时间戳、描述和统计信息
+**快照发现机制**：
+- ✅ 自动通过反射从项目程序集中发现所有快照类
+- ✅ 快照类必须继承自 `CodeFlowAnalysisSnapshot`
+- ✅ 只有代码变化时才会添加新快照（基于 hash 比较）
+- ✅ 快照按版本自动排序（最新的在前）
+- ✅ 无需手动指定快照目录
 
-**注意**：如果没有快照文件，将自动生成不含历史的HTML。
+生成的HTML页面包含：
+- 📊 **版本选择器**：交互式下拉框，可切换查看不同版本的架构（如果存在多个快照）
+  - 自动显示快照描述和时间戳
+  - 切换版本时自动刷新所有图表和统计信息
+  - 专业深色主题样式，与页面整体风格一致
+- 📈 **历史趋势图表**（2个或更多快照时显示）：
+  - **总体趋势**：展示总元素数量和总关系数量随时间变化
+  - **元素类型趋势**：跟踪 Aggregate、Command、DomainEvent 等各类型数量变化
+  - **关系类型趋势**：跟踪 CommandToHandler、AggregateToDomainEvent 等关系数量变化
+  - **交互式图例**：点击图例项可显示/隐藏对应指标
+  - **响应式图表**：使用 Chart.js 库，支持缩放和详细数据提示
+  - **过滤一致性**：趋势图表使用与统计信息页面相同的过滤规则
+- 🔍 **版本间一致性**：所有视图（统计、架构图、流程图）在不同快照间自动同步
+- 📝 **版本信息**：每个快照包含完整的元数据（时间戳、描述、hash、节点和关系数量）
+
+**注意**：
+- 如果没有快照文件，将自动生成不含历史的HTML（仅显示当前版本）
+- 快照通过反射自动发现，无需手动指定快照目录
+- 只有当代码实际变化（hash不同）时才会创建新快照
 
 ### 典型工作流程
 
