@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace NetCorePal.Extensions.CodeAnalysis.Tools;
@@ -17,6 +18,14 @@ internal static class AppCsContentGenerator
         {
             sb.AppendLine($"#:project {projectPath}");
         }
+        var nugetversion = typeof(SnapshotAppCsGenerator).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion.Split('+')[0];
+        if(!string.IsNullOrEmpty(nugetversion))
+        {
+            sb.AppendLine($"#:package NetCorePal.Extensions.CodeAnalysis@{nugetversion}");
+        }
+
 
         sb.AppendLine();
         sb.AppendLine("using NetCorePal.Extensions.CodeAnalysis;");

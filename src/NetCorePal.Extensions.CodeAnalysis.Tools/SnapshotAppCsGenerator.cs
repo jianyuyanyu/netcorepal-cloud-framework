@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace NetCorePal.Extensions.CodeAnalysis.Tools;
@@ -34,6 +35,15 @@ public static class SnapshotAppCsGenerator
         foreach (var projectPath in projectPaths)
         {
             sb.AppendLine($"#:project {projectPath}");
+        }
+
+        // 获取当前nuget包版本号
+        var nugetversion = typeof(SnapshotAppCsGenerator).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion.Split('+')[0];
+        if(!string.IsNullOrEmpty(nugetversion))
+        {
+            sb.AppendLine($"#:package NetCorePal.Extensions.CodeAnalysis@{nugetversion}");
         }
 
         sb.AppendLine();
