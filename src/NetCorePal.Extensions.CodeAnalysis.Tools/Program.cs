@@ -740,21 +740,8 @@ public class Program
             await ListSnapshotsFromProject(projects, verbose);
         }, projectOption, verboseOption);
 
-        // snapshot show command
-        var showCommand = new Command("show", "Show details of a specific snapshot");
-        var versionArg = new Argument<string>("version", "Snapshot version to show");
-        showCommand.AddArgument(versionArg);
-        showCommand.AddOption(projectOption);
-        showCommand.AddOption(verboseOption);
-
-        showCommand.SetHandler(async (version, projects, verbose) =>
-        {
-            await ShowSnapshotFromProject(version, projects, verbose);
-        }, versionArg, projectOption, verboseOption);
-
         snapshotCommand.AddCommand(addCommand);
         snapshotCommand.AddCommand(listCommand);
-        snapshotCommand.AddCommand(showCommand);
 
         return snapshotCommand;
     }
@@ -1360,70 +1347,6 @@ public class Program
             {
                 Console.WriteLine(
                     $"{snapshot.Version,-20} {snapshot.Timestamp:yyyy-MM-dd HH:mm:ss,-22} {snapshot.NodeCount,-8} {snapshot.RelationshipCount,-15} {snapshot.Description}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Error: {ex.Message}");
-            if (verbose)
-            {
-                Console.Error.WriteLine($"Stack trace: {ex.StackTrace}");
-            }
-            ExitHandler.Exit(1);
-        }
-        await Task.CompletedTask;
-    }
-
-    private static async Task ShowSnapshotFromProject(string version, FileInfo[]? projectFiles, bool verbose)
-    {
-        try
-        {
-            var projectDir = GetProjectDirectory(projectFiles, verbose);
-            var snapshotDir = Path.Combine(projectDir, "Snapshots");
-
-            if (verbose)
-            {
-                Console.WriteLine($"Loading snapshot from: {snapshotDir}");
-            }
-
-            var snapshot = LoadSnapshotFile(version, snapshotDir);
-
-            if (snapshot == null)
-            {
-                Console.Error.WriteLine($"Error: Snapshot not found: {version}");
-                ExitHandler.Exit(1);
-                return;
-            }
-
-            Console.WriteLine($"Snapshot: {snapshot.Metadata.Version}");
-            Console.WriteLine($"Timestamp: {snapshot.Metadata.Timestamp:yyyy-MM-dd HH:mm:ss}");
-            Console.WriteLine($"Description: {snapshot.Metadata.Description}");
-            Console.WriteLine($"Hash: {snapshot.Metadata.Hash}");
-            Console.WriteLine($"\nStatistics:");
-            Console.WriteLine($"  Total Nodes: {snapshot.Metadata.NodeCount}");
-            Console.WriteLine($"  Total Relationships: {snapshot.Metadata.RelationshipCount}");
-
-            if (verbose)
-            {
-                var nodeStats = snapshot.GetAnalysisResult().Nodes
-                    .GroupBy(n => n.Type)
-                    .OrderBy(g => g.Key.ToString());
-
-                Console.WriteLine($"\nNode Types:");
-                foreach (var group in nodeStats)
-                {
-                    Console.WriteLine($"  {group.Key}: {group.Count()}");
-                }
-
-                var relStats = snapshot.GetAnalysisResult().Relationships
-                    .GroupBy(r => r.Type)
-                    .OrderBy(g => g.Key.ToString());
-
-                Console.WriteLine($"\nRelationship Types:");
-                foreach (var group in relStats)
-                {
-                    Console.WriteLine($"  {group.Key}: {group.Count()}");
-                }
             }
         }
         catch (Exception ex)
