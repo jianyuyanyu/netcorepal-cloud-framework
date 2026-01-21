@@ -1177,8 +1177,10 @@
                 'DomainEventToIntegrationEvent'
             ];
             
-            // 准备图表数据
-            const labels = dataSources.map(ds => {
+            // 准备图表数据 - 反转顺序使时间越早的在左边
+            const reversedDataSources = [...dataSources].reverse();
+            
+            const labels = reversedDataSources.map(ds => {
                 const meta = ds.metadata;
                 return meta.description || `版本 ${meta.version}`;
             });
@@ -1192,7 +1194,7 @@
                 
                 return {
                     label: type,
-                    data: dataSources.map(ds => ds.statistics.nodeStats[type] || 0),
+                    data: reversedDataSources.map(ds => ds.statistics.nodeStats[type] || 0),
                     borderColor: colors[index % colors.length],
                     backgroundColor: colors[index % colors.length] + '33',
                     tension: 0.4,
@@ -1210,7 +1212,7 @@
                 
                 return {
                     label: type,
-                    data: dataSources.map(ds => ds.statistics.relationshipStats[type] || 0),
+                    data: reversedDataSources.map(ds => ds.statistics.relationshipStats[type] || 0),
                     borderColor: colors[index % colors.length],
                     backgroundColor: colors[index % colors.length] + '33',
                     tension: 0.4,
@@ -1223,7 +1225,7 @@
             const totalDatasets = [
                 {
                     label: '总元素数',
-                    data: dataSources.map(ds => {
+                    data: reversedDataSources.map(ds => {
                         // 计算过滤后的总数
                         return displayNodeTypes.reduce((sum, type) => sum + (ds.statistics.nodeStats[type] || 0), 0);
                     }),
@@ -1234,7 +1236,7 @@
                 },
                 {
                     label: '总关系数',
-                    data: dataSources.map(ds => {
+                    data: reversedDataSources.map(ds => {
                         // 计算过滤后的总数
                         return displayRelationshipTypes.reduce((sum, type) => sum + (ds.statistics.relationshipStats[type] || 0), 0);
                     }),
