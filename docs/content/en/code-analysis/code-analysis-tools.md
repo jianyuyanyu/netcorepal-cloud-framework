@@ -266,22 +266,6 @@ namespace CodeAnalysisSnapshots
 }
 ```
 
-### Listing Snapshots
-
-```bash
-# List all snapshots
-netcorepal-codeanalysis snapshot list --snapshot-dir Snapshots
-
-# Example output:
-# Found 3 snapshot(s):
-#
-# Version              Timestamp              Nodes    Relationships   Description
-# ----------------------------------------------------------------------------------------------------
-# 20260116120000       2026-01-16 12:00:00    45       78              Added order module
-# 20260115100000       2026-01-15 10:00:00    38       65              Refactored user service
-# 20260114090000       2026-01-14 09:00:00    32       52              Initial version
-```
-
 ### Generating HTML with History
 
 ```bash
@@ -329,11 +313,13 @@ netcorepal-codeanalysis snapshot add --project MyProject.csproj --description "P
 # 3. Create new snapshot
 netcorepal-codeanalysis snapshot add --project MyProject.csproj --description "Added payment functionality"
 
-# 4. View snapshot history
-netcorepal-codeanalysis snapshot list
-
-# 5. Generate visualization (includes history by default)
+# 4. Generate visualization HTML (includes history by default, auto-discovers all snapshots via reflection)
 netcorepal-codeanalysis generate --project MyProject.csproj --output architecture.html
+
+# 5. Open the generated HTML file to view:
+#    - Version selector dropdown (switch between snapshots)
+#    - Historical trends charts (shown with 2+ snapshots)
+#    - Complete architecture analysis and statistics
 
 # 6. Commit snapshots to version control (recommended)
 git add Snapshots/
@@ -371,11 +357,25 @@ git commit -m "Add architecture snapshot: [description]"
 - If current directory contains only one `.csproj`, `--project` can be omitted
 - Snapshot files are saved in project directory (relative paths resolved from project directory)
 
-**`snapshot list` Command**:
-- `--snapshot-dir`: Snapshot directory (default: `Snapshots`)
-- `--verbose, -v`: Show detailed statistics
+### Viewing Snapshot History
 
-**`snapshot show` Command**:
-- First argument: Snapshot version number
-- `--snapshot-dir`: Snapshot directory (default: `Snapshots`)
-- `--verbose, -v`: Show detailed statistics
+Snapshot history is not viewed through CLI commands, but through the generated HTML visualization file:
+
+```bash
+# Generate HTML with all snapshot history
+netcorepal-codeanalysis generate --project MyProject.csproj --output architecture.html
+```
+
+The generated HTML file provides a better snapshot viewing experience:
+- **Version Selector Dropdown**: Interactively switch between different snapshot versions
+- **Historical Trends Charts**: Visualize architecture evolution (shown with 2+ snapshots)
+  - Total trends chart (element and relationship count changes)
+  - Element types trend chart (individual type count changes)
+  - Relationship types trend chart (relationship type count changes)
+- **Interactive Legends**: Click to show/hide specific metrics
+- **Complete Statistics**: Detailed metadata and statistics for each snapshot
+
+**Automatic Snapshot Discovery**:
+- The tool automatically discovers all snapshot classes from project assemblies via reflection
+- No need to manually specify snapshot directory or version numbers
+- Only creates new snapshots when code actually changes (based on hash comparison)

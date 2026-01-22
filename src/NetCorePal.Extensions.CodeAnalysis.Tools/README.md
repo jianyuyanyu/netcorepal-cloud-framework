@@ -152,32 +152,6 @@ namespace CodeAnalysisSnapshots
 }
 ```
 
-### 查看快照列表
-
-```bash
-# 列出所有快照
-netcorepal-codeanalysis snapshot list
-
-# 输出示例：
-# Found 3 snapshot(s):
-#
-# Version              Timestamp              Nodes    Relationships   Description
-# ----------------------------------------------------------------------------------------------------
-# 20260116120000       2026-01-16 12:00:00    45       78              添加订单模块
-# 20260115100000       2026-01-15 10:00:00    38       65              重构用户服务
-# 20260114090000       2026-01-14 09:00:00    32       52              初始版本
-```
-
-### 查看快照详情
-
-```bash
-# 显示指定版本的快照详细信息
-netcorepal-codeanalysis snapshot show 20260116120000
-
-# 使用 --verbose 显示更详细的统计信息
-netcorepal-codeanalysis snapshot show 20260116120000 --verbose
-```
-
 ### 生成带历史记录的HTML
 
 ```bash
@@ -236,11 +210,10 @@ netcorepal-codeanalysis snapshot add --description "项目初始版本"
 # 3. 创建新快照
 netcorepal-codeanalysis snapshot add --description "添加支付功能"
 
-# 4. 查看快照历史
-netcorepal-codeanalysis snapshot list
-
-# 5. 生成可视化（默认包含历史）
+# 4. 生成可视化HTML（默认包含历史，通过反射自动发现所有快照）
 netcorepal-codeanalysis generate --output architecture.html
+
+# 5. 打开生成的HTML文件查看快照历史和趋势图表
 
 # 6. 提交快照到版本控制（推荐）
 git add Snapshots/

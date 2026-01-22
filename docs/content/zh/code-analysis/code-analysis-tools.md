@@ -280,22 +280,6 @@ namespace CodeAnalysisSnapshots
 }
 ```
 
-### 查看快照列表
-
-```bash
-# 列出所有快照
-netcorepal-codeanalysis snapshot list --snapshot-dir Snapshots
-
-# 输出示例：
-# Found 3 snapshot(s):
-#
-# Version              Timestamp              Nodes    Relationships   Description
-# ----------------------------------------------------------------------------------------------------
-# 20260116120000       2026-01-16 12:00:00    45       78              添加订单模块
-# 20260115100000       2026-01-15 10:00:00    38       65              重构用户服务
-# 20260114090000       2026-01-14 09:00:00    32       52              初始版本
-```
-
 ### 生成带历史记录的HTML
 
 ```bash
@@ -343,11 +327,13 @@ netcorepal-codeanalysis snapshot add --project MyProject.csproj --description "�
 # 3. 创建新快照
 netcorepal-codeanalysis snapshot add --project MyProject.csproj --description "添加支付功能"
 
-# 4. 查看快照历史
-netcorepal-codeanalysis snapshot list
-
-# 5. 生成可视化（默认包含历史）
+# 4. 生成可视化HTML（默认包含历史，通过反射自动发现所有快照）
 netcorepal-codeanalysis generate --project MyProject.csproj --output architecture.html
+
+# 5. 打开生成的HTML文件查看：
+#    - 版本选择器下拉框（切换不同快照）
+#    - 历史趋势图表（2个或更多快照时显示）
+#    - 完整的架构分析和统计信息
 
 # 6. 提交快照到版本控制（推荐）
 git add Snapshots/
@@ -385,11 +371,25 @@ git commit -m "Add architecture snapshot: [描述]"
 - 如果当前目录只有一个 `.csproj` 文件，可以省略 `--project`
 - 快照文件保存在项目目录中（相对路径相对于项目目录解析）
 
-**`snapshot list` 命令**：
-- `--snapshot-dir`：快照目录（默认：`Snapshots`）
-- `--verbose, -v`：显示详细统计信息
+### 查看快照历史
 
-**`snapshot show` 命令**：
-- 第一个参数：快照版本号
-- `--snapshot-dir`：快照目录（默认：`Snapshots`）
-- `--verbose, -v`：显示详细统计信息
+快照历史无需通过CLI命令查看，而是通过生成的HTML可视化文件查看：
+
+```bash
+# 生成包含所有快照历史的HTML
+netcorepal-codeanalysis generate --project MyProject.csproj --output architecture.html
+```
+
+生成的HTML文件提供了更好的快照查看体验：
+- **版本选择器下拉框**：交互式切换不同快照版本
+- **历史趋势图表**：可视化展示架构演进（2个或更多快照时显示）
+  - 总体趋势图（元素和关系数量变化）
+  - 元素类型趋势图（各类型元素数量变化）
+  - 关系类型趋势图（各类型关系数量变化）
+- **交互式图例**：点击显示/隐藏特定指标
+- **完整统计信息**：每个快照的详细元数据和统计数据
+
+**快照自动发现**：
+- 工具通过反射自动从项目程序集中发现所有快照类
+- 无需手动指定快照目录或版本号
+- 只有代码实际变化（hash不同）时才会创建新快照
