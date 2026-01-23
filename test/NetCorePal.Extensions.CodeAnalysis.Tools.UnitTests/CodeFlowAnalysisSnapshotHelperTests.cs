@@ -67,7 +67,6 @@ public class CodeFlowAnalysisSnapshotHelperTests
     public void GenerateSnapshotCode_ShouldGenerateValidCSharpCode()
     {
         // Arrange
-        var analysisResult = CreateTestAnalysisResult();
         var metadata = new SnapshotMetadata
         {
             Version = "20260116120000",
@@ -102,7 +101,6 @@ public class CodeFlowAnalysisSnapshotHelperTests
     public void GenerateSnapshotCode_WithName_ShouldIncludeNameInClassName()
     {
         // Arrange
-        var analysisResult = CreateTestAnalysisResult();
         var metadata = new SnapshotMetadata
         {
             Version = "20260116120000",
@@ -270,7 +268,6 @@ public class CodeFlowAnalysisSnapshotHelperTests
         {
             new Node { Id = "node1", Name = "Test\"Quote", FullName = "Test\\Backslash", Type = NodeType.Aggregate }
         };
-        var analysisResult = new CodeFlowAnalysisResult { Nodes = nodes, Relationships = new List<Relationship>() };
         var metadata = new SnapshotMetadata
         {
             Version = "20260116120000",
@@ -306,12 +303,6 @@ public class CodeFlowAnalysisSnapshotHelperTests
         
         var rel1 = new Relationship(node1, node3, RelationshipType.CommandToAggregate);
         var rel2 = new Relationship(node2, node3, RelationshipType.CommandToAggregate);
-
-        var analysisResult = new CodeFlowAnalysisResult
-        {
-            Nodes = new List<Node> { node1, node2, node3 },
-            Relationships = new List<Relationship> { rel1, rel2 }
-        };
 
         var metadata = new SnapshotMetadata
         {

@@ -62,8 +62,7 @@ public static class CodeFlowAnalysisSnapshotHelper
     /// <returns>C#代码字符串</returns>
     public static string GenerateSnapshotCode(Attributes.MetadataAttribute[] metadataAttributes, SnapshotMetadata metadata, string? snapshotName = null)
     {
-        // Generate code based on MetadataAttributes instead of AnalysisResult
-        var analysisResult = CodeFlowAnalysisHelper.GetResultFromAttributes(metadataAttributes);
+        // Generate code based on MetadataAttributes
         return GenerateSnapshotCodeFromResult(metadataAttributes, metadata, snapshotName);
     }
     
@@ -311,12 +310,9 @@ public static class CodeFlowAnalysisSnapshotHelper
             return "Snapshot";
             
         var sb = new StringBuilder();
-        foreach (var c in input)
+        foreach (var c in input.Where(c => char.IsLetterOrDigit(c) || c == '_'))
         {
-            if (char.IsLetterOrDigit(c) || c == '_')
-            {
-                sb.Append(c);
-            }
+            sb.Append(c);
         }
         
         var result = sb.ToString();

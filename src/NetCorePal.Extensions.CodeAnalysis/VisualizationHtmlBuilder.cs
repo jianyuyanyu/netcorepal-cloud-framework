@@ -27,9 +27,6 @@ namespace NetCorePal.Extensions.CodeAnalysis
             bool withHistory = true,
             System.Collections.Generic.List<Snapshots.CodeFlowAnalysisSnapshot>? snapshots = null)
         {
-            // Determine which result to use for visualization
-            CodeFlowAnalysisResult resultToVisualize;
-            
             // 准备快照集合
             var snapshotList = new System.Collections.Generic.List<Snapshots.CodeFlowAnalysisSnapshot>();
             
@@ -37,12 +34,6 @@ namespace NetCorePal.Extensions.CodeAnalysis
             {
                 // 使用提供的快照
                 snapshotList = snapshots;
-                resultToVisualize = snapshotList[0].GetAnalysisResult();
-            }
-            else
-            {
-                // 没有快照时，直接使用当前分析结果
-                resultToVisualize = analysisResult;
             }
 
             // 读取嵌入资源模板内容

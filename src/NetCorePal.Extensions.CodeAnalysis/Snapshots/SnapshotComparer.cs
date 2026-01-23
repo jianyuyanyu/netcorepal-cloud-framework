@@ -103,16 +103,13 @@ public class SnapshotComparer
         }
 
         // 查找删除的节点
-        foreach (var node in fromNodes.Values)
+        foreach (var node in fromNodes.Values.Where(node => !toNodes.ContainsKey(node.Id)))
         {
-            if (!toNodes.ContainsKey(node.Id))
+            comparison.NodeDiffs.Add(new NodeDiff
             {
-                comparison.NodeDiffs.Add(new NodeDiff
-                {
-                    Node = node,
-                    DiffType = DiffType.Removed
-                });
-            }
+                Node = node,
+                DiffType = DiffType.Removed
+            });
         }
     }
 
@@ -150,16 +147,13 @@ public class SnapshotComparer
         }
 
         // 查找删除的关系
-        foreach (var relKey in fromRels)
+        foreach (var relKey in fromRels.Where(relKey => !toRels.Contains(relKey)))
         {
-            if (!toRels.Contains(relKey))
+            comparison.RelationshipDiffs.Add(new RelationshipDiff
             {
-                comparison.RelationshipDiffs.Add(new RelationshipDiff
-                {
-                    Relationship = fromRelDict[relKey],
-                    DiffType = DiffType.Removed
-                });
-            }
+                Relationship = fromRelDict[relKey],
+                DiffType = DiffType.Removed
+            });
         }
     }
 }
