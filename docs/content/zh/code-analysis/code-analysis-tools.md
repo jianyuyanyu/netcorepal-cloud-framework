@@ -390,8 +390,8 @@ git commit -m "Add architecture snapshot: [描述]"
 | 选项 | 别名 | 类型 | 默认值 | 说明 |
 |------|------|------|--------|------|
 | `--project <project>` | `-p` | 文件路径 | 自动发现 | 要分析的项目文件（`.csproj`） |
-| `--name <name>` | `-n` | 字符串 | 无 | 快照名称（可选，用于文件名，如：InitialCreate） |
-| `--description <description>` | `-d` | 字符串 | "Snapshot created" | 快照描述 |
+| `--name <name>` | `-n` | 字符串 | 无 | 快照名称（可选，用于文件名，建议使用英文标识符，如：InitialCreate） |
+| `--description <description>` | `-d` | 字符串 | "Snapshot created" | 快照描述（可使用中文） |
 | `--snapshot-dir <dir>` | — | 目录路径 | `Snapshots` | 快照存储目录 |
 | `--verbose` | `-v` | 开关 | `false` | 启用详细输出 |
 | `--include-tests` | — | 开关 | `false` | 包含测试项目 |
@@ -418,6 +418,7 @@ netcorepal-codeanalysis snapshot add \
 - 如果当前目录只有一个 `.csproj` 文件，可以省略 `--project`
 - 快照文件保存在项目目录中（相对路径相对于项目目录解析）
 - 快照以 C# 代码文件形式保存，遵循 EF Core 迁移风格
+- `--name` 参数建议使用英文标识符（遵循 EF Core 迁移命名约定），`--description` 可使用中文描述
 
 ### 查看快照历史
 
