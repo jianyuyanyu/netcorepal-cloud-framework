@@ -28,6 +28,25 @@ dotnet tool install NetCorePal.Extensions.CodeAnalysis.Tools
 
 ## 使用方法
 
+### 命令概览
+
+工具提供两个主要命令：
+
+| 命令 | 说明 |
+|------|------|
+| `generate` | 分析项目/解决方案并生成交互式 HTML 可视化 |
+| `snapshot` | 管理架构快照以追踪演进历史 |
+
+**快速参考**：
+
+```bash
+# 生成架构可视化
+netcorepal-codeanalysis generate [选项]
+
+# 创建架构快照
+netcorepal-codeanalysis snapshot add [选项]
+```
+
 ### 快速上手
 
 ```bash
@@ -359,17 +378,46 @@ git commit -m "Add architecture snapshot: [描述]"
 
 ### 快照命令参考
 
-**`snapshot add` 命令**：
-- `--project, -p`：项目文件路径（`.csproj`，必需或自动发现）
-- `--name`：快照名称（可选，用于文件名）
-- `--description, -d`：快照描述（必需）
-- `--snapshot-dir`：快照目录（默认：`Snapshots`）
-- `--verbose, -v`：详细输出
+#### 主要命令
+
+| 命令 | 说明 |
+|------|------|
+| `netcorepal-codeanalysis snapshot` | 管理分析快照（类似 EF Core 迁移） |
+| `netcorepal-codeanalysis snapshot add` | 创建当前分析的新快照 |
+
+#### `snapshot add` 命令参数
+
+| 选项 | 别名 | 类型 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `--project <project>` | `-p` | 文件路径 | 自动发现 | 要分析的项目文件（`.csproj`） |
+| `--name <name>` | `-n` | 字符串 | 无 | 快照名称（可选，用于文件名，如：InitialCreate） |
+| `--description <description>` | `-d` | 字符串 | "Snapshot created" | 快照描述 |
+| `--snapshot-dir <dir>` | — | 目录路径 | `Snapshots` | 快照存储目录 |
+| `--verbose` | `-v` | 开关 | `false` | 启用详细输出 |
+| `--include-tests` | — | 开关 | `false` | 包含测试项目 |
+
+**命令用法**：
+
+```bash
+# 创建带描述的快照
+netcorepal-codeanalysis snapshot add --description "初始版本"
+
+# 为特定项目创建快照
+netcorepal-codeanalysis snapshot add --project MyProject.csproj --description "添加订单模块"
+
+# 创建带自定义名称和目录的快照
+netcorepal-codeanalysis snapshot add \
+  --project MyProject.csproj \
+  --name "AddedPaymentFeature" \
+  --description "添加支付功能" \
+  --snapshot-dir ./MySnapshots
+```
 
 **注意**：
 - `snapshot add` 仅支持单个项目文件（不支持解决方案）
 - 如果当前目录只有一个 `.csproj` 文件，可以省略 `--project`
 - 快照文件保存在项目目录中（相对路径相对于项目目录解析）
+- 快照以 C# 代码文件形式保存，遵循 EF Core 迁移风格
 
 ### 查看快照历史
 

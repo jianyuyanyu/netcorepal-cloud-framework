@@ -28,6 +28,25 @@ dotnet tool install NetCorePal.Extensions.CodeAnalysis.Tools
 
 ## Usage
 
+### Commands Overview
+
+The tool provides two main commands:
+
+| Command | Description |
+|---------|-------------|
+| `generate` | Analyze projects/solutions and generate interactive HTML visualization |
+| `snapshot` | Manage architecture snapshots for tracking evolution over time |
+
+**Quick Reference**:
+
+```bash
+# Generate architecture visualization
+netcorepal-codeanalysis generate [options]
+
+# Create architecture snapshot
+netcorepal-codeanalysis snapshot add [options]
+```
+
 ### Quick Start
 
 ```bash
@@ -345,17 +364,46 @@ git commit -m "Add architecture snapshot: [description]"
 
 ### Snapshot Command Reference
 
-**`snapshot add` Command**:
-- `--project, -p`: Project file path (`.csproj`, required or auto-discovered)
-- `--name`: Snapshot name (optional, used in filename)
-- `--description, -d`: Snapshot description (required)
-- `--snapshot-dir`: Snapshot directory (default: `Snapshots`)
-- `--verbose, -v`: Verbose output
+#### Main Commands
+
+| Command | Description |
+|---------|-------------|
+| `netcorepal-codeanalysis snapshot` | Manage analysis snapshots (similar to EF Core migrations) |
+| `netcorepal-codeanalysis snapshot add` | Create a new snapshot of current analysis |
+
+#### `snapshot add` Command Parameters
+
+| Option | Alias | Type | Default | Description |
+|--------|-------|------|---------|-------------|
+| `--project <project>` | `-p` | File path | Auto-discovered | Project file to analyze (`.csproj`) |
+| `--name <name>` | `-n` | String | N/A | Snapshot name (optional, used in filename, e.g., InitialCreate) |
+| `--description <description>` | `-d` | String | "Snapshot created" | Snapshot description |
+| `--snapshot-dir <dir>` | — | Directory path | `Snapshots` | Directory to store snapshots |
+| `--verbose` | `-v` | Switch | `false` | Enable verbose output |
+| `--include-tests` | — | Switch | `false` | Include test projects |
+
+**Command Usage**:
+
+```bash
+# Create snapshot with description
+netcorepal-codeanalysis snapshot add --description "Initial version"
+
+# Create snapshot for specific project
+netcorepal-codeanalysis snapshot add --project MyProject.csproj --description "Added order module"
+
+# Create snapshot with custom name and directory
+netcorepal-codeanalysis snapshot add \
+  --project MyProject.csproj \
+  --name "AddedPaymentFeature" \
+  --description "Added payment functionality" \
+  --snapshot-dir ./MySnapshots
+```
 
 **Notes**:
 - `snapshot add` only supports single project files (no solution files)
 - If current directory contains only one `.csproj`, `--project` can be omitted
 - Snapshot files are saved in project directory (relative paths resolved from project directory)
+- Snapshots are saved as C# code files in EF Core migration style
 
 ### Viewing Snapshot History
 
