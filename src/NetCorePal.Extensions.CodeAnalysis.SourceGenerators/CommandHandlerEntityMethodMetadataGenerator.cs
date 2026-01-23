@@ -69,7 +69,7 @@ public class CommandHandlerEntityMethodMetadataGenerator : IIncrementalGenerator
                             var typeInfo = semanticModel.GetTypeInfo(objCreation).Type as INamedTypeSymbol;
                             if (typeInfo != null && typeInfo.IsEntity())
                             {
-                                // 统一用 .ctor 作为构造方法名
+                                // 不使用参数签名，所有构造函数统一为 .ctor
                                 handlerMetas.Add((handlerType, commandType, typeInfo.ToDisplayString(), ".ctor"));
                             }
                         }

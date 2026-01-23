@@ -220,4 +220,56 @@ public class ProjectAnalysisHelpersAdditionalTests
         }
         finally { Directory.Delete(tempRoot, true); }
     }
+
+    [Fact]
+    public void GetVersionWithoutGithash_Returns_VersionWithoutGitHash()
+    {
+        // Act
+        var version = ProjectAnalysisHelpers.GetVersionWithoutGithash();
+
+        // Assert
+        Assert.NotNull(version);
+        // Version should not contain '+' character (Git hash separator)
+        Assert.DoesNotContain("+", version);
+        // Version should have a valid format (at least one dot for major.minor)
+        Assert.Contains(".", version);
+    }
+
+    [Fact]
+    public void GetVersionWithoutGithash_Strips_GitHash_From_InformationalVersion()
+    {
+        // Arrange - Get the actual InformationalVersion which may contain a Git hash
+        var fullVersion = typeof(ProjectAnalysisHelpers).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+
+        // Act
+        var versionWithoutHash = ProjectAnalysisHelpers.GetVersionWithoutGithash();
+
+        // Assert
+        Assert.NotNull(versionWithoutHash);
+        
+        if (fullVersion != null && fullVersion.Contains('+'))
+        {
+            // If the full version contains a Git hash, verify it was stripped
+            var expectedVersion = fullVersion.Split('+')[0];
+            Assert.Equal(expectedVersion, versionWithoutHash);
+        }
+        else
+        {
+            // If no Git hash, version should be unchanged
+            Assert.Equal(fullVersion, versionWithoutHash);
+        }
+    }
+
+    [Fact]
+    public void GetVersionWithoutGithash_Returns_Consistent_Value()
+    {
+        // Act - Call the method twice
+        var version1 = ProjectAnalysisHelpers.GetVersionWithoutGithash();
+        var version2 = ProjectAnalysisHelpers.GetVersionWithoutGithash();
+
+        // Assert - Should return the same value on multiple calls
+        Assert.Equal(version1, version2);
+    }
 }

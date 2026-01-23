@@ -184,7 +184,9 @@ namespace NetCorePal.Extensions.CodeAnalysis.SourceGenerators
                 var containingType = invokedSymbol.ContainingType;
                 if (containingType != null && containingType.IsEntity())
                 {
-                    result = (containingType.ToDisplayString(), invokedSymbol.Name);
+                    // 只使用方法名，不包含参数签名
+                    var methodName = invokedSymbol.Name;
+                    result = (containingType.ToDisplayString(), methodName);
                     return true;
                 }
             }

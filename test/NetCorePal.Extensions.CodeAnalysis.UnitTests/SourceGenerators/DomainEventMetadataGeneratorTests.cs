@@ -23,7 +23,8 @@ public class DomainEventMetadataGeneratorTests
             "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.RecursiveEventA",
             "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.RecursiveEventB",
             "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.RecursiveEventC",
-            "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.SelfReferencingEvent"
+            "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.SelfReferencingEvent",
+            "NetCorePal.Extensions.CodeAnalysis.UnitTests.TestClasses.OverloadedEntityUpdatedEvent"
         };
         Assert.Equal(expected.Length, attrs.Count);
         foreach (var evt in expected)
