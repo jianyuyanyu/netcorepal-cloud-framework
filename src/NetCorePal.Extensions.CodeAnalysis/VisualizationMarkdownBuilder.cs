@@ -50,8 +50,10 @@ namespace NetCorePal.Extensions.CodeAnalysis
                 {
                     var metadata = snapshot.Metadata;
                     // Parse version string as DateTime
-                    var timestamp = DateTime.ParseExact(metadata.Version, "yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture);
-                    sb.AppendLine($"- **{timestamp:yyyy-MM-dd HH:mm:ss}**: {metadata.Description}");
+                    var timestampStr = TryParseVersionAsDateTime(metadata.Version, out var timestamp)
+                        ? timestamp.ToString("yyyy-MM-dd HH:mm:ss")
+                        : metadata.Version;
+                    sb.AppendLine($"- **{timestampStr}**: {metadata.Description}");
                     sb.AppendLine($"  - 节点数: {metadata.NodeCount}, 关系数: {metadata.RelationshipCount}");
                     sb.AppendLine($"  - Hash: `{metadata.Hash}`");
                 }
@@ -247,8 +249,10 @@ namespace NetCorePal.Extensions.CodeAnalysis
             
             foreach (var snapshot in snapshots.OrderBy(s => s.Metadata.Version))
             {
-                var timestamp = DateTime.ParseExact(snapshot.Metadata.Version, "yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture);
-                sb.AppendLine($"| {timestamp:yyyy-MM-dd HH:mm} | {EscapeMarkdown(snapshot.Metadata.Description)} | {snapshot.Metadata.NodeCount} | {snapshot.Metadata.RelationshipCount} |");
+                var timestampStr = TryParseVersionAsDateTime(snapshot.Metadata.Version, out var timestamp)
+                    ? timestamp.ToString("yyyy-MM-dd HH:mm")
+                    : snapshot.Metadata.Version;
+                sb.AppendLine($"| {timestampStr} | {EscapeMarkdown(snapshot.Metadata.Description)} | {snapshot.Metadata.NodeCount} | {snapshot.Metadata.RelationshipCount} |");
             }
             
             sb.AppendLine();
@@ -287,11 +291,13 @@ namespace NetCorePal.Extensions.CodeAnalysis
             // Build data rows
             foreach (var snapshot in snapshots.OrderBy(s => s.Metadata.Version))
             {
-                var timestamp = DateTime.ParseExact(snapshot.Metadata.Version, "yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture);
+                var timestampStr = TryParseVersionAsDateTime(snapshot.Metadata.Version, out var timestamp)
+                    ? timestamp.ToString("yyyy-MM-dd HH:mm")
+                    : snapshot.Metadata.Version;
                 var result = snapshot.GetAnalysisResult();
                 var nodesByType = result.Nodes.GroupBy(n => n.Type).ToDictionary(g => g.Key, g => g.Count());
                 
-                sb.Append($"| {timestamp:yyyy-MM-dd HH:mm} |");
+                sb.Append($"| {timestampStr} |");
                 foreach (var nodeType in allNodeTypes.OrderBy(t => t.ToString()))
                 {
                     var count = nodesByType.ContainsKey(nodeType) ? nodesByType[nodeType] : 0;
@@ -370,6 +376,19 @@ namespace NetCorePal.Extensions.CodeAnalysis
                 .Replace("-", "\\-")
                 .Replace(".", "\\.")
                 .Replace("!", "\\!");
+        }
+        
+        /// <summary>
+        /// Safely parses a version string (format: yyyyMMddHHmmss) to DateTime
+        /// </summary>
+        private static bool TryParseVersionAsDateTime(string version, out DateTime dateTime)
+        {
+            return DateTime.TryParseExact(
+                version, 
+                "yyyyMMddHHmmss", 
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None,
+                out dateTime);
         }
     }
 }
