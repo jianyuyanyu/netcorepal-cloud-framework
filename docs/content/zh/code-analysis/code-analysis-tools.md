@@ -259,7 +259,7 @@ netcorepal-codeanalysis snapshot add --project MyProject.csproj --name "AddedPay
 ```
 
 **快照文件命名规则**：
-- 格式：`Snapshot_{Version}_{Name}.cs`（遵循 EF Core 迁移命名约定）
+- 格式：`Snapshot_{Version}_{Name}.cs`
 - Version：时间戳格式 `YYYYMMDDHHmmss`
 - Name：可选，从 `--name` 或 `--description` 派生（sanitized为有效标识符）
 - 示例：`Snapshot_20260116120000_AddedOrderModule.cs`
@@ -417,8 +417,8 @@ netcorepal-codeanalysis snapshot add \
 - `snapshot add` 仅支持单个项目文件（不支持解决方案）
 - 如果当前目录只有一个 `.csproj` 文件，可以省略 `--project`
 - 快照文件保存在项目目录中（相对路径相对于项目目录解析）
-- 快照以 C# 代码文件形式保存，遵循 EF Core 迁移风格
-- `--name` 参数建议使用英文标识符（遵循 EF Core 迁移命名约定），`--description` 可使用中文描述
+- 快照以 C# 代码文件形式保存
+- `--name` 参数建议使用英文标识符，`--description` 可使用中文描述
 
 ### 查看快照历史
 
