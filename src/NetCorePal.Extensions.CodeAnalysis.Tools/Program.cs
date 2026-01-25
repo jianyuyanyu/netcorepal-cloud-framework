@@ -169,16 +169,26 @@ public class Program
 
         var outputOption = new Option<FileInfo>(
             name: "--output",
-            description: "Output HTML file path")
+            description: "Output file path")
         {
             IsRequired = false
         };
         outputOption.AddAlias("-o");
         outputOption.SetDefaultValue(new FileInfo("architecture-visualization.html"));
 
+        var formatOption = new Option<string>(
+            name: "--format",
+            description: "Output format (html or markdown)")
+        {
+            IsRequired = false
+        };
+        formatOption.AddAlias("-f");
+        formatOption.SetDefaultValue("html");
+        formatOption.FromAmong("html", "markdown", "md");
+
         var titleOption = new Option<string>(
             name: "--title",
-            description: "HTML page title")
+            description: "Page/document title")
         {
             IsRequired = false
         };
@@ -211,6 +221,7 @@ public class Program
         generateCommand.AddOption(solutionOption);
         generateCommand.AddOption(projectOption);
         generateCommand.AddOption(outputOption);
+        generateCommand.AddOption(formatOption);
         generateCommand.AddOption(titleOption);
         generateCommand.AddOption(verboseOption);
         generateCommand.AddOption(includeTestsOption);
@@ -218,10 +229,10 @@ public class Program
         
 
         generateCommand.SetHandler(
-            async (solution, projects, output, title, verbose, includeTests, noHistory) =>
+            async (solution, projects, output, format, title, verbose, includeTests, noHistory) =>
             {
-                await GenerateVisualization(solution, projects, output, title, verbose, includeTests, !noHistory);
-            }, solutionOption, projectOption, outputOption, titleOption, verboseOption, includeTestsOption, noHistoryOption);
+                await GenerateVisualization(solution, projects, output, format, title, verbose, includeTests, !noHistory);
+            }, solutionOption, projectOption, outputOption, formatOption, titleOption, verboseOption, includeTestsOption, noHistoryOption);
 
         rootCommand.AddCommand(generateCommand);
         
@@ -233,14 +244,30 @@ public class Program
     }
 
     private static async Task GenerateVisualization(FileInfo? solutionFile, FileInfo[]? projectFiles,
-        FileInfo outputFile, string title, bool verbose, bool includeTests, bool withHistory)
+        FileInfo outputFile, string format, string title, bool verbose, bool includeTests, bool withHistory)
     {
         try
         {
+            // Normalize format
+            var normalizedFormat = format.ToLowerInvariant() == "md" ? "markdown" : format.ToLowerInvariant();
+            
+            // Auto-adjust output file extension if needed
+            var expectedExtension = normalizedFormat == "markdown" ? ".md" : ".html";
+            var outputPath = outputFile.FullName;
+            
+            // If output uses default value and format is markdown, change extension
+            if (outputFile.FullName.EndsWith("architecture-visualization.html", StringComparison.OrdinalIgnoreCase) 
+                && normalizedFormat == "markdown")
+            {
+                outputPath = outputFile.FullName.Replace(".html", ".md");
+                outputFile = new FileInfo(outputPath);
+            }
+            
             if (verbose)
             {
                 Console.WriteLine($"NetCorePal Code Analysis Tool v{ProjectAnalysisHelpers.GetVersion()}");
                 Console.WriteLine($"Output file: {outputFile.FullName}");
+                Console.WriteLine($"Format: {normalizedFormat}");
                 Console.WriteLine($"Title: {title}");
                 Console.WriteLine($"Include tests: {includeTests}");
                 Console.WriteLine($"History mode: {withHistory}");
@@ -386,7 +413,8 @@ public class Program
                 allProjects.ToList(), 
                 absoluteOutputPath, 
                 title,
-                withHistory);
+                withHistory,
+                normalizedFormat);
 
             if (verbose)
             {
@@ -529,7 +557,8 @@ public class Program
                 // Check if output file was created
                 if (File.Exists(absoluteOutputPath))
                 {
-                    Console.WriteLine($"✅ HTML visualization generated successfully: {absoluteOutputPath}");
+                    var formatDisplay = normalizedFormat == "markdown" ? "Markdown" : "HTML";
+                    Console.WriteLine($"✅ {formatDisplay} visualization generated successfully: {absoluteOutputPath}");
 
                     if (verbose)
                     {
