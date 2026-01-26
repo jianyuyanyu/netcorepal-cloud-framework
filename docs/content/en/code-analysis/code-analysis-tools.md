@@ -75,8 +75,9 @@ netcorepal-codeanalysis generate --verbose
 |---|---|---|---|---|
 | `--solution <solution>` | `-s` | File path | N/A | Solution file to analyze, `.sln`/`.slnx` |
 | `--project <project>` | `-p` | File path (repeatable) | N/A | Project file(s) to analyze (`.csproj`) |
-| `--output <output>` | `-o` | File path | `architecture-visualization.html` | Output HTML file path |
-| `--title <title>` | `-t` | String | `架构可视化` | HTML page title |
+| `--output <output>` | `-o` | File path | `architecture-visualization.html` | Output file path |
+| `--format <format>` | `-f` | String | `html` | Output format: `html` or `markdown` (can also use `md`) |
+| `--title <title>` | `-t` | String | `架构可视化` | Page/document title |
 | `--verbose` | `-v` | Switch | `false` | Enable verbose output |
 | `--include-tests` | — | Switch | `false` | Include test projects (see rules below) |
 
@@ -120,6 +121,48 @@ Use `generate` to analyze a solution or one or more projects and produce an inte
    ```
 
    
+
+## Output Formats
+
+The tool supports two output formats:
+
+### HTML Format (Default)
+
+Generates an interactive HTML visualization page with complete navigation, chart switching, and online editing features.
+
+```bash
+# Generate HTML format (default)
+netcorepal-codeanalysis generate
+
+# Explicitly specify HTML format
+netcorepal-codeanalysis generate --format html
+```
+
+### Markdown Format
+
+Generates a Markdown document to help Large Language Models understand the business model, including:
+- Overview statistics (node and relationship counts)
+- Architecture elements list (grouped by type)
+- Component relationship details
+- Embedded Mermaid diagrams (architecture overview, processing flows, aggregate relations)
+- Version history trends (if history is enabled)
+
+```bash
+# Generate Markdown format
+netcorepal-codeanalysis generate --format markdown
+
+# Or use shorthand
+netcorepal-codeanalysis generate --format md
+
+# Custom output filename
+netcorepal-codeanalysis generate --format markdown --output architecture.md
+
+# Custom title
+netcorepal-codeanalysis generate --format md --title "Order System Architecture Analysis"
+```
+
+**Note**: When using the default output filename, Markdown format automatically changes the file extension to `.md`.
+
 
 ## Auto-Discovery Mechanism
 
