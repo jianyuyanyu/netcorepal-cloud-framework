@@ -98,22 +98,64 @@ namespace NetCorePal.Extensions.CodeAnalysis
             return sb.ToString();
         }
         
+        // 定义要显示的节点类型（与HTML模板保持一致）
+        private static readonly NodeType[] DisplayNodeTypes = new[]
+        {
+            NodeType.Controller,
+            NodeType.Endpoint,
+            NodeType.CommandSender,
+            NodeType.Command,
+            NodeType.CommandHandler,
+            NodeType.Aggregate,
+            NodeType.DomainEvent,
+            NodeType.IntegrationEvent,
+            NodeType.DomainEventHandler,
+            NodeType.IntegrationEventHandler,
+            NodeType.IntegrationEventConverter
+        };
+        
+        // 定义要显示的关系类型（与HTML模板保持一致）
+        private static readonly RelationshipType[] DisplayRelationshipTypes = new[]
+        {
+            RelationshipType.ControllerToCommand,
+            RelationshipType.EndpointToCommand,
+            RelationshipType.CommandSenderToCommand,
+            RelationshipType.CommandToAggregate,
+            RelationshipType.AggregateToDomainEvent,
+            RelationshipType.DomainEventToHandler,
+            RelationshipType.DomainEventHandlerToCommand,
+            RelationshipType.IntegrationEventToHandler,
+            RelationshipType.IntegrationEventHandlerToCommand,
+            RelationshipType.DomainEventToIntegrationEvent
+        };
+        
         private static void GenerateStatistics(StringBuilder sb, CodeFlowAnalysisResult analysisResult)
         {
-            var nodesByType = analysisResult.Nodes.GroupBy(n => n.Type).OrderBy(g => g.Key.ToString());
-            var relationshipsByType = analysisResult.Relationships.GroupBy(r => r.Type).OrderBy(g => g.Key.ToString());
+            // 过滤节点和关系类型
+            var nodesByType = analysisResult.Nodes
+                .Where(n => DisplayNodeTypes.Contains(n.Type))
+                .GroupBy(n => n.Type)
+                .OrderBy(g => Array.IndexOf(DisplayNodeTypes, g.Key));
+            
+            var relationshipsByType = analysisResult.Relationships
+                .Where(r => DisplayRelationshipTypes.Contains(r.Type))
+                .GroupBy(r => r.Type)
+                .OrderBy(g => Array.IndexOf(DisplayRelationshipTypes, g.Key));
             
             sb.AppendLine("### 节点统计");
             sb.AppendLine();
             sb.AppendLine("| 类型 | 数量 |");
             sb.AppendLine("|------|------|");
             
+            var filteredNodeCount = 0;
             foreach (var group in nodesByType)
             {
-                sb.AppendLine($"| {GetNodeTypeDisplayName(group.Key)} | {group.Count()} |");
+                var count = group.Count();
+                filteredNodeCount += count;
+                sb.AppendLine($"| {GetNodeTypeDisplayName(group.Key)} | {count} |");
             }
             
-            sb.AppendLine($"| **总计** | **{analysisResult.Nodes.Count}** |");
+            sb.AppendLine($"| **总计** | **{filteredNodeCount}** |");
             sb.AppendLine();
             
             sb.AppendLine("### 关系统计");
@@ -121,18 +163,25 @@ namespace NetCorePal.Extensions.CodeAnalysis
             sb.AppendLine("| 类型 | 数量 |");
             sb.AppendLine("|------|------|");
             
+            var filteredRelationshipCount = 0;
             foreach (var group in relationshipsByType)
             {
-                sb.AppendLine($"| {GetRelationshipTypeDisplayName(group.Key)} | {group.Count()} |");
+                var count = group.Count();
+                filteredRelationshipCount += count;
+                sb.AppendLine($"| {GetRelationshipTypeDisplayName(group.Key)} | {count} |");
             }
             
-            sb.AppendLine($"| **总计** | **{analysisResult.Relationships.Count}** |");
+            sb.AppendLine($"| **总计** | **{filteredRelationshipCount}** |");
             sb.AppendLine();
         }
         
         private static void GenerateNodesByType(StringBuilder sb, CodeFlowAnalysisResult analysisResult)
         {
-            var nodesByType = analysisResult.Nodes.GroupBy(n => n.Type).OrderBy(g => g.Key.ToString());
+            // 过滤并按定义顺序排序
+            var nodesByType = analysisResult.Nodes
+                .Where(n => DisplayNodeTypes.Contains(n.Type))
+                .GroupBy(n => n.Type)
+                .OrderBy(g => Array.IndexOf(DisplayNodeTypes, g.Key));
             
             foreach (var group in nodesByType)
             {
@@ -163,7 +212,11 @@ namespace NetCorePal.Extensions.CodeAnalysis
         
         private static void GenerateRelationships(StringBuilder sb, CodeFlowAnalysisResult analysisResult)
         {
-            var relationshipsByType = analysisResult.Relationships.GroupBy(r => r.Type).OrderBy(g => g.Key.ToString());
+            // 过滤并按定义顺序排序
+            var relationshipsByType = analysisResult.Relationships
+                .Where(r => DisplayRelationshipTypes.Contains(r.Type))
+                .GroupBy(r => r.Type)
+                .OrderBy(g => Array.IndexOf(DisplayRelationshipTypes, g.Key));
             
             foreach (var group in relationshipsByType)
             {
@@ -260,7 +313,13 @@ namespace NetCorePal.Extensions.CodeAnalysis
                 var timestampStr = TryParseVersionAsDateTime(snapshot.Metadata.Version, out var timestamp)
                     ? timestamp.ToString("yyyy-MM-dd HH:mm")
                     : EscapeMarkdown(snapshot.Metadata.Version);
-                sb.AppendLine($"| {timestampStr} | {EscapeMarkdown(snapshot.Metadata.Description)} | {snapshot.Metadata.NodeCount} | {snapshot.Metadata.RelationshipCount} |");
+                
+                // 计算过滤后的数量
+                var result = snapshot.GetAnalysisResult();
+                var filteredNodeCount = result.Nodes.Count(n => DisplayNodeTypes.Contains(n.Type));
+                var filteredRelationshipCount = result.Relationships.Count(r => DisplayRelationshipTypes.Contains(r.Type));
+                
+                sb.AppendLine($"| {timestampStr} | {EscapeMarkdown(snapshot.Metadata.Description)} | {filteredNodeCount} | {filteredRelationshipCount} |");
             }
             
             sb.AppendLine();
@@ -269,17 +328,18 @@ namespace NetCorePal.Extensions.CodeAnalysis
             sb.AppendLine("### 各类型节点数量变化");
             sb.AppendLine();
             
-            // Collect all node types across all snapshots
+            // Collect all node types across all snapshots (filtered)
             var allNodeTypes = new System.Collections.Generic.HashSet<NodeType>();
             foreach (var snapshot in snapshots)
             {
                 var result = snapshot.GetAnalysisResult();
-                allNodeTypes.UnionWith(result.Nodes.Select(n => n.Type));
+                allNodeTypes.UnionWith(result.Nodes.Where(n => DisplayNodeTypes.Contains(n.Type)).Select(n => n.Type));
             }
             
-            // Build header
+            // Build header (按DisplayNodeTypes定义的顺序)
+            var orderedNodeTypes = DisplayNodeTypes.Where(t => allNodeTypes.Contains(t)).ToArray();
             sb.Append("| 版本 |");
-            foreach (var nodeType in allNodeTypes.OrderBy(t => t.ToString()))
+            foreach (var nodeType in orderedNodeTypes)
             {
                 sb.Append($" {GetNodeTypeDisplayName(nodeType)} |");
             }
@@ -287,7 +347,7 @@ namespace NetCorePal.Extensions.CodeAnalysis
             
             // Build separator
             sb.Append("|------|");
-            foreach (var _ in allNodeTypes)
+            foreach (var _ in orderedNodeTypes)
             {
                 sb.Append("------|");
             }
@@ -300,10 +360,13 @@ namespace NetCorePal.Extensions.CodeAnalysis
                     ? timestamp.ToString("yyyy-MM-dd HH:mm")
                     : EscapeMarkdown(snapshot.Metadata.Version);
                 var result = snapshot.GetAnalysisResult();
-                var nodesByType = result.Nodes.GroupBy(n => n.Type).ToDictionary(g => g.Key, g => g.Count());
+                var nodesByType = result.Nodes
+                    .Where(n => DisplayNodeTypes.Contains(n.Type))
+                    .GroupBy(n => n.Type)
+                    .ToDictionary(g => g.Key, g => g.Count());
                 
                 sb.Append($"| {timestampStr} |");
-                foreach (var nodeType in allNodeTypes.OrderBy(t => t.ToString()))
+                foreach (var nodeType in orderedNodeTypes)
                 {
                     var count = nodesByType.TryGetValue(nodeType, out var value) ? value : 0;
                     sb.Append($" {count} |");
