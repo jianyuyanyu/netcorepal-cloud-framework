@@ -65,6 +65,7 @@ netcorepal-codeanalysis generate --verbose
 | `--title <title>` | `-t` | 字符串 | `架构可视化` | 生成页面的标题 |
 | `--verbose` | `-v` | 开关 | `false` | 启用详细日志输出 |
 | `--include-tests` | 无 | 开关 | `false` | 包含测试项目（默认不包含；规则见下文“测试项目识别规则”） |
+| `--format <format>` | `-f` | 字符串 | `html` | 输出格式：`html` 或 `markdown`（也可使用 `md`） |
 
 ### 自动发现行为
 
@@ -98,6 +99,47 @@ netcorepal-codeanalysis generate --project A.csproj --project B.csproj
 ```bash
 netcorepal-codeanalysis generate --include-tests
 ```
+
+### 输出格式
+
+工具支持两种输出格式：
+
+#### HTML 格式（默认）
+
+生成交互式 HTML 可视化页面，包含完整的导航、图表切换和在线编辑功能。
+
+```bash
+# 生成 HTML 格式（默认）
+netcorepal-codeanalysis generate
+
+# 显式指定 HTML 格式
+netcorepal-codeanalysis generate --format html
+```
+
+#### Markdown 格式
+
+生成 Markdown 文档，便于大语言模型理解业务模型，包含：
+- 概览统计（节点和关系计数）
+- 架构元素列表（按类型分组）
+- 组件关系详情
+- 嵌入式 Mermaid 图表（架构总览图、处理流程图、聚合关系图）
+- 版本历史趋势（如果启用历史记录）
+
+```bash
+# 生成 Markdown 格式
+netcorepal-codeanalysis generate --format markdown
+
+# 或使用简写
+netcorepal-codeanalysis generate --format md
+
+# 自定义输出文件名
+netcorepal-codeanalysis generate --format markdown --output architecture.md
+
+# 自定义标题
+netcorepal-codeanalysis generate --format md --title "订单系统架构分析"
+```
+
+**注意**：当使用默认输出文件名时，Markdown 格式会自动将文件扩展名改为 `.md`。
 
 ## 历史记录特性（类似 EF Core 迁移）
 

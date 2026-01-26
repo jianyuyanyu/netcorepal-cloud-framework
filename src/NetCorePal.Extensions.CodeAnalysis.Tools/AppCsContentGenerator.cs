@@ -9,7 +9,7 @@ namespace NetCorePal.Extensions.CodeAnalysis.Tools;
 
 internal static class AppCsContentGenerator
 {
-    internal static string GenerateAppCsContent(List<string> projectPaths, string outputPath, string title, bool withHistory = true)
+    internal static string GenerateAppCsContent(List<string> projectPaths, string outputPath, string title, bool withHistory = true, string format = "html")
     {
         var sb = new StringBuilder();
 
@@ -115,14 +115,29 @@ internal static class AppCsContentGenerator
             sb.AppendLine("    snapshots.Insert(0, currentSnapshot);");
             sb.AppendLine("}");
             sb.AppendLine();
-            sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\", withHistory: true, snapshots: snapshots);");
+            
+            if (format.ToLowerInvariant() == "markdown")
+            {
+                sb.AppendLine($"var output = VisualizationMarkdownBuilder.GenerateVisualizationMarkdown(result, @\"{escapedTitle}\", includeMermaid: true, withHistory: true, snapshots: snapshots);");
+            }
+            else
+            {
+                sb.AppendLine($"var output = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\", withHistory: true, snapshots: snapshots);");
+            }
         }
         else
         {
-            sb.AppendLine($"var html = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\", withHistory: false);");
+            if (format.ToLowerInvariant() == "markdown")
+            {
+                sb.AppendLine($"var output = VisualizationMarkdownBuilder.GenerateVisualizationMarkdown(result, @\"{escapedTitle}\", includeMermaid: true, withHistory: false);");
+            }
+            else
+            {
+                sb.AppendLine($"var output = VisualizationHtmlBuilder.GenerateVisualizationHtml(result, @\"{escapedTitle}\", withHistory: false);");
+            }
         }
         
-        sb.AppendLine($"File.WriteAllText(@\"{escapedOutputPath}\", html);");
+        sb.AppendLine($"File.WriteAllText(@\"{escapedOutputPath}\", output);");
 
         return sb.ToString();
     }
