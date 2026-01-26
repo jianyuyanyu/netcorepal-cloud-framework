@@ -309,4 +309,33 @@ public class VisualizationMarkdownBuilderTests
         Assert.Contains("\\*", markdown);
         Assert.Contains("\\`", markdown);
     }
+
+    [Fact]
+    public void GenerateVisualizationMarkdown_WithMermaid_IncludesConfigurationNote()
+    {
+        // Arrange
+        var result = new CodeFlowAnalysisResult
+        {
+            Nodes = new List<Node>
+            {
+                new Node { Id = "1", Name = "TestController", Type = NodeType.Controller }
+            },
+            Relationships = new List<Relationship>()
+        };
+
+        // Act
+        var markdown = VisualizationMarkdownBuilder.GenerateVisualizationMarkdown(
+            result,
+            "Test",
+            maxEdges: 3000,
+            maxTextSize: 500000,
+            includeMermaid: true,
+            withHistory: false);
+
+        // Assert
+        // Should include configuration note with custom values
+        Assert.Contains("maxEdges: 3000", markdown);
+        Assert.Contains("maxTextSize: 500000", markdown);
+        Assert.Contains("注意", markdown);
+    }
 }

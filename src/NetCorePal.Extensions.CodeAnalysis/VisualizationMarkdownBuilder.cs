@@ -14,6 +14,8 @@ namespace NetCorePal.Extensions.CodeAnalysis
         /// </summary>
         /// <param name="analysisResult">分析结果</param>
         /// <param name="title">文档标题</param>
+        /// <param name="maxEdges">最大边数（用于Mermaid配置注释）</param>
+        /// <param name="maxTextSize">最大文本大小（用于Mermaid配置注释）</param>
         /// <param name="includeMermaid">是否包含Mermaid图表（默认true）</param>
         /// <param name="withHistory">是否包含历史快照（默认true）</param>
         /// <param name="snapshots">历史快照列表（当withHistory=true时使用）</param>
@@ -21,6 +23,8 @@ namespace NetCorePal.Extensions.CodeAnalysis
         public static string GenerateVisualizationMarkdown(
             CodeFlowAnalysisResult analysisResult,
             string title = "系统架构分析",
+            int maxEdges = 5000,
+            int maxTextSize = 1000000,
             bool includeMermaid = true,
             bool withHistory = true,
             System.Collections.Generic.List<Snapshots.CodeFlowAnalysisSnapshot>? snapshots = null)
@@ -80,7 +84,7 @@ namespace NetCorePal.Extensions.CodeAnalysis
             {
                 sb.AppendLine("## 📊 架构图表");
                 sb.AppendLine();
-                GenerateMermaidDiagrams(sb, analysisResult);
+                GenerateMermaidDiagrams(sb, analysisResult, maxEdges, maxTextSize);
             }
             
             // History Trends (if multiple snapshots)
@@ -184,8 +188,12 @@ namespace NetCorePal.Extensions.CodeAnalysis
             }
         }
         
-        private static void GenerateMermaidDiagrams(StringBuilder sb, CodeFlowAnalysisResult analysisResult)
+        private static void GenerateMermaidDiagrams(StringBuilder sb, CodeFlowAnalysisResult analysisResult, int maxEdges, int maxTextSize)
         {
+            // Add Mermaid configuration note
+            sb.AppendLine("> **注意**: 以下 Mermaid 图表建议配置参数: `maxEdges: {maxEdges}, maxTextSize: {maxTextSize}`".Replace("{maxEdges}", maxEdges.ToString()).Replace("{maxTextSize}", maxTextSize.ToString()));
+            sb.AppendLine();
+            
             // Architecture Overview
             sb.AppendLine("### 架构总览图");
             sb.AppendLine();
