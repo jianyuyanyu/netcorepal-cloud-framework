@@ -242,7 +242,6 @@ public class VisualizationMarkdownBuilderTests
 
         // Assert
         Assert.Contains("## 📈 演进趋势", markdown);
-        Assert.Contains("### 节点数量变化", markdown);
         Assert.Contains("### 各类型节点数量变化", markdown);
         Assert.Contains("Version 1", markdown);
         Assert.Contains("Version 2", markdown);

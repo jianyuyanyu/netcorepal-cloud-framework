@@ -58,7 +58,6 @@ namespace NetCorePal.Extensions.CodeAnalysis
                         ? timestamp.ToString("yyyy-MM-dd HH:mm:ss")
                         : EscapeMarkdown(metadata.Version);
                     sb.AppendLine($"- **{timestampStr}**: {EscapeMarkdown(metadata.Description)}");
-                    sb.AppendLine($"  - 节点数: {metadata.NodeCount}, 关系数: {metadata.RelationshipCount}");
                     sb.AppendLine($"  - Hash: `{metadata.Hash}`");
                 }
                 sb.AppendLine();
@@ -303,27 +302,6 @@ namespace NetCorePal.Extensions.CodeAnalysis
         
         private static void GenerateHistoryTrends(StringBuilder sb, System.Collections.Generic.List<Snapshots.CodeFlowAnalysisSnapshot> snapshots)
         {
-            sb.AppendLine("### 节点数量变化");
-            sb.AppendLine();
-            sb.AppendLine("| 版本 | 描述 | 总节点数 | 总关系数 |");
-            sb.AppendLine("|------|------|----------|----------|");
-            
-            foreach (var snapshot in snapshots.OrderBy(s => s.Metadata.Version))
-            {
-                var timestampStr = TryParseVersionAsDateTime(snapshot.Metadata.Version, out var timestamp)
-                    ? timestamp.ToString("yyyy-MM-dd HH:mm")
-                    : EscapeMarkdown(snapshot.Metadata.Version);
-                
-                // 计算过滤后的数量
-                var result = snapshot.GetAnalysisResult();
-                var filteredNodeCount = result.Nodes.Count(n => DisplayNodeTypes.Contains(n.Type));
-                var filteredRelationshipCount = result.Relationships.Count(r => DisplayRelationshipTypes.Contains(r.Type));
-                
-                sb.AppendLine($"| {timestampStr} | {EscapeMarkdown(snapshot.Metadata.Description)} | {filteredNodeCount} | {filteredRelationshipCount} |");
-            }
-            
-            sb.AppendLine();
-            
             // Detailed type breakdown
             sb.AppendLine("### 各类型节点数量变化");
             sb.AppendLine();
