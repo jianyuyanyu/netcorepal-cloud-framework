@@ -253,14 +253,20 @@ public class Program
             
             // Auto-adjust output file extension if needed
             var expectedExtension = normalizedFormat == "markdown" ? ".md" : ".html";
-            var outputPath = outputFile.FullName;
             
             // If output uses default value and format is markdown, change extension
             if (outputFile.FullName.EndsWith("architecture-visualization.html", StringComparison.OrdinalIgnoreCase) 
                 && normalizedFormat == "markdown")
             {
-                outputPath = outputFile.FullName.Replace(".html", ".md");
-                outputFile = new FileInfo(outputPath);
+                outputFile = new FileInfo(outputFile.FullName.Replace(".html", ".md"));
+            }
+            
+            // Warn when the chosen output file extension does not match the selected format
+            if (verbose && !outputFile.FullName.EndsWith(expectedExtension, StringComparison.OrdinalIgnoreCase))
+            {
+                var currentExtension = Path.GetExtension(outputFile.FullName);
+                Console.WriteLine(
+                    $"Warning: Output file extension '{currentExtension}' does not match the selected format '{normalizedFormat}'. Expected '{expectedExtension}'.");
             }
             
             if (verbose)

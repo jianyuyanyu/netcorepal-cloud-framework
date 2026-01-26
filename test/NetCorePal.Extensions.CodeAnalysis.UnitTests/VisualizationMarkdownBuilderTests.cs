@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using NetCorePal.Extensions.CodeAnalysis;
+using NetCorePal.Extensions.CodeAnalysis.Attributes;
+using NetCorePal.Extensions.CodeAnalysis.Snapshots;
 using Xunit;
 
 namespace NetCorePal.Extensions.CodeAnalysis.UnitTests;
@@ -146,5 +148,165 @@ public class VisualizationMarkdownBuilderTests
         Assert.Contains("\\#", markdown);
         Assert.Contains("\\[", markdown);
         Assert.Contains("\\]", markdown);
+    }
+
+    [Fact]
+    public void GenerateVisualizationMarkdown_WithHistory_IncludesVersionHistory()
+    {
+        // Arrange
+        var result = new CodeFlowAnalysisResult
+        {
+            Nodes = new List<Node>
+            {
+                new Node { Id = "1", Name = "TestController", Type = NodeType.Controller }
+            },
+            Relationships = new List<Relationship>()
+        };
+
+        var attributes = new MetadataAttribute[] { };
+        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(attributes, "Initial version", "20260125120000");
+        var snapshots = new List<CodeFlowAnalysisSnapshot> { snapshot };
+
+        // Act
+        var markdown = VisualizationMarkdownBuilder.GenerateVisualizationMarkdown(
+            result,
+            "Test Architecture",
+            includeMermaid: false,
+            withHistory: true,
+            snapshots: snapshots);
+
+        // Assert
+        Assert.Contains("## 📊 版本历史", markdown);
+        Assert.Contains("当前分析包含 1 个版本快照", markdown);
+        Assert.Contains("Initial version", markdown);
+        Assert.Contains("2026-01-25 12:00:00", markdown);
+    }
+
+    [Fact]
+    public void GenerateVisualizationMarkdown_WithHistory_EscapesPipeCharactersInDescriptions()
+    {
+        // Arrange
+        var result = new CodeFlowAnalysisResult
+        {
+            Nodes = new List<Node>
+            {
+                new Node { Id = "1", Name = "TestController", Type = NodeType.Controller }
+            },
+            Relationships = new List<Relationship>()
+        };
+
+        var attributes = new MetadataAttribute[] { };
+        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(attributes, "Added feature | with pipe", "20260125120000");
+        var snapshots = new List<CodeFlowAnalysisSnapshot> { snapshot };
+
+        // Act
+        var markdown = VisualizationMarkdownBuilder.GenerateVisualizationMarkdown(
+            result,
+            "Test",
+            includeMermaid: false,
+            withHistory: true,
+            snapshots: snapshots);
+
+        // Assert
+        // Pipe character should be escaped
+        Assert.Contains("\\|", markdown);
+        Assert.Contains("Added feature \\| with pipe", markdown);
+    }
+
+    [Fact]
+    public void GenerateVisualizationMarkdown_WithMultipleSnapshots_GeneratesTrendTables()
+    {
+        // Arrange
+        var result = new CodeFlowAnalysisResult
+        {
+            Nodes = new List<Node>
+            {
+                new Node { Id = "1", Name = "TestController", Type = NodeType.Controller },
+                new Node { Id = "2", Name = "TestCommand", Type = NodeType.Command }
+            },
+            Relationships = new List<Relationship>()
+        };
+
+        var attributes = new MetadataAttribute[] { };
+        var snapshot1 = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(attributes, "Version 1", "20260125100000");
+        var snapshot2 = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(attributes, "Version 2", "20260125120000");
+        var snapshots = new List<CodeFlowAnalysisSnapshot> { snapshot1, snapshot2 };
+
+        // Act
+        var markdown = VisualizationMarkdownBuilder.GenerateVisualizationMarkdown(
+            result,
+            "Test",
+            includeMermaid: false,
+            withHistory: true,
+            snapshots: snapshots);
+
+        // Assert
+        Assert.Contains("## 📈 演进趋势", markdown);
+        Assert.Contains("### 节点数量变化", markdown);
+        Assert.Contains("### 各类型节点数量变化", markdown);
+        Assert.Contains("Version 1", markdown);
+        Assert.Contains("Version 2", markdown);
+    }
+
+    [Fact]
+    public void GenerateVisualizationMarkdown_WithMalformedVersionString_HandlesGracefully()
+    {
+        // Arrange
+        var result = new CodeFlowAnalysisResult
+        {
+            Nodes = new List<Node>
+            {
+                new Node { Id = "1", Name = "TestController", Type = NodeType.Controller }
+            },
+            Relationships = new List<Relationship>()
+        };
+
+        var attributes = new MetadataAttribute[] { };
+        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(attributes, "Test description", "invalid|version");
+        var snapshots = new List<CodeFlowAnalysisSnapshot> { snapshot };
+
+        // Act
+        var markdown = VisualizationMarkdownBuilder.GenerateVisualizationMarkdown(
+            result,
+            "Test",
+            includeMermaid: false,
+            withHistory: true,
+            snapshots: snapshots);
+
+        // Assert
+        // Should not crash and should escape the pipe character
+        Assert.Contains("\\|", markdown);
+        Assert.DoesNotContain("invalid|version", markdown); // Unescaped version should not appear
+    }
+
+    [Fact]
+    public void GenerateVisualizationMarkdown_WithSpecialCharsInDescriptions_EscapesInTables()
+    {
+        // Arrange
+        var result = new CodeFlowAnalysisResult
+        {
+            Nodes = new List<Node>
+            {
+                new Node { Id = "1", Name = "TestController", Type = NodeType.Controller }
+            },
+            Relationships = new List<Relationship>()
+        };
+
+        var attributes = new MetadataAttribute[] { };
+        var snapshot = CodeFlowAnalysisSnapshotHelper.CreateSnapshot(attributes, "Added **bold** and *italic* and `code`", "20260125120000");
+        var snapshots = new List<CodeFlowAnalysisSnapshot> { snapshot };
+
+        // Act
+        var markdown = VisualizationMarkdownBuilder.GenerateVisualizationMarkdown(
+            result,
+            "Test",
+            includeMermaid: false,
+            withHistory: true,
+            snapshots: snapshots);
+
+        // Assert
+        // Special markdown characters should be escaped
+        Assert.Contains("\\*", markdown);
+        Assert.Contains("\\`", markdown);
     }
 }

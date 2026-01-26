@@ -52,8 +52,8 @@ namespace NetCorePal.Extensions.CodeAnalysis
                     // Parse version string as DateTime
                     var timestampStr = TryParseVersionAsDateTime(metadata.Version, out var timestamp)
                         ? timestamp.ToString("yyyy-MM-dd HH:mm:ss")
-                        : metadata.Version;
-                    sb.AppendLine($"- **{timestampStr}**: {metadata.Description}");
+                        : EscapeMarkdown(metadata.Version);
+                    sb.AppendLine($"- **{timestampStr}**: {EscapeMarkdown(metadata.Description)}");
                     sb.AppendLine($"  - 节点数: {metadata.NodeCount}, 关系数: {metadata.RelationshipCount}");
                     sb.AppendLine($"  - Hash: `{metadata.Hash}`");
                 }
@@ -203,7 +203,7 @@ namespace NetCorePal.Extensions.CodeAnalysis
             {
                 foreach (var (chainName, diagram) in processingFlows)
                 {
-                    sb.AppendLine($"#### {chainName}");
+                    sb.AppendLine($"#### {EscapeMarkdown(chainName)}");
                     sb.AppendLine();
                     sb.AppendLine("```mermaid");
                     sb.AppendLine(diagram);
@@ -225,7 +225,7 @@ namespace NetCorePal.Extensions.CodeAnalysis
             {
                 foreach (var (aggregateName, diagram) in aggregateRelations)
                 {
-                    sb.AppendLine($"#### {aggregateName}");
+                    sb.AppendLine($"#### {EscapeMarkdown(aggregateName)}");
                     sb.AppendLine();
                     sb.AppendLine("```mermaid");
                     sb.AppendLine(diagram);
@@ -251,7 +251,7 @@ namespace NetCorePal.Extensions.CodeAnalysis
             {
                 var timestampStr = TryParseVersionAsDateTime(snapshot.Metadata.Version, out var timestamp)
                     ? timestamp.ToString("yyyy-MM-dd HH:mm")
-                    : snapshot.Metadata.Version;
+                    : EscapeMarkdown(snapshot.Metadata.Version);
                 sb.AppendLine($"| {timestampStr} | {EscapeMarkdown(snapshot.Metadata.Description)} | {snapshot.Metadata.NodeCount} | {snapshot.Metadata.RelationshipCount} |");
             }
             
@@ -266,10 +266,7 @@ namespace NetCorePal.Extensions.CodeAnalysis
             foreach (var snapshot in snapshots)
             {
                 var result = snapshot.GetAnalysisResult();
-                foreach (var nodeType in result.Nodes.Select(n => n.Type).Distinct())
-                {
-                    allNodeTypes.Add(nodeType);
-                }
+                allNodeTypes.UnionWith(result.Nodes.Select(n => n.Type));
             }
             
             // Build header
@@ -293,14 +290,14 @@ namespace NetCorePal.Extensions.CodeAnalysis
             {
                 var timestampStr = TryParseVersionAsDateTime(snapshot.Metadata.Version, out var timestamp)
                     ? timestamp.ToString("yyyy-MM-dd HH:mm")
-                    : snapshot.Metadata.Version;
+                    : EscapeMarkdown(snapshot.Metadata.Version);
                 var result = snapshot.GetAnalysisResult();
                 var nodesByType = result.Nodes.GroupBy(n => n.Type).ToDictionary(g => g.Key, g => g.Count());
                 
                 sb.Append($"| {timestampStr} |");
                 foreach (var nodeType in allNodeTypes.OrderBy(t => t.ToString()))
                 {
-                    var count = nodesByType.ContainsKey(nodeType) ? nodesByType[nodeType] : 0;
+                    var count = nodesByType.TryGetValue(nodeType, out var value) ? value : 0;
                     sb.Append($" {count} |");
                 }
                 sb.AppendLine();
@@ -359,9 +356,10 @@ namespace NetCorePal.Extensions.CodeAnalysis
             if (string.IsNullOrEmpty(text))
                 return text;
             
-            // Escape special markdown characters
+            // Escape special markdown characters including pipe for tables
             return text
                 .Replace("\\", "\\\\")
+                .Replace("|", "\\|")
                 .Replace("`", "\\`")
                 .Replace("*", "\\*")
                 .Replace("_", "\\_")
