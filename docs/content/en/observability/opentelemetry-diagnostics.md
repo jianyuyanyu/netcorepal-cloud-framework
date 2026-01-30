@@ -284,20 +284,20 @@ Consider:
 
 ### Diagnostic Source
 
-This package subscribes to the `NetCorePal.Diagnostics` diagnostic source and listens for the following events:
+This package subscribes to the `NetCorePal` diagnostic source and listens for the following events:
 
-- `NetCorePal.DomainEventHandler.Begin`
-- `NetCorePal.DomainEventHandler.End`
-- `NetCorePal.DomainEventHandler.Error`
-- `NetCorePal.IntegrationEventHandler.Begin`
-- `NetCorePal.IntegrationEventHandler.End`
-- `NetCorePal.IntegrationEventHandler.Error`
-- `NetCorePal.CommandHandler.Begin`
-- `NetCorePal.CommandHandler.End`
-- `NetCorePal.CommandHandler.Error`
-- `NetCorePal.Transaction.Begin`
-- `NetCorePal.Transaction.Commit`
-- `NetCorePal.Transaction.Rollback`
+- `NetCorePal.DomainEventHandlerBegin`
+- `NetCorePal.DomainEventHandlerEnd`
+- `NetCorePal.DomainEventHandlerError`
+- `NetCorePal.IntegrationEventHandlerBegin`
+- `NetCorePal.IntegrationEventHandlerEnd`
+- `NetCorePal.IntegrationEventHandlerError`
+- `NetCorePal.CommandHandlerBegin`
+- `NetCorePal.CommandHandlerEnd`
+- `NetCorePal.CommandHandlerError`
+- `NetCorePal.TransactionBegin`
+- `NetCorePal.TransactionCommit`
+- `NetCorePal.TransactionRollback`
 
 ### Activity Source
 
