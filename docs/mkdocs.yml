@@ -84,6 +84,8 @@ nav:
       - 领域事件处理器: zh/events/domain-event-handler.md
       - 集成事件处理器: zh/events/integration-event-handler.md
       - 集成事件转换器: zh/events/integration-converter.md
+    - 可观测性:
+      - OpenTelemetry诊断: zh/observability/opentelemetry-diagnostics.md
     - 服务发现: zh/service-discovery/service-discovery.md
     - 上下文传递: 
       - 上下文: zh/context/context.md
@@ -135,6 +137,8 @@ nav:
         - Domain Event Handler: en/events/domain-event-handler.md
         - Integration Event Handler: en/events/integration-event-handler.md
         - Integration Converter: en/events/integration-converter.md
+    - Observability:
+        - OpenTelemetry Diagnostics: en/observability/opentelemetry-diagnostics.md
     - Service Discovery: en/service-discovery/service-discovery.md
     - Context Passing:
         - Context: en/context/context.md
